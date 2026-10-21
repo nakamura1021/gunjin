@@ -1,0 +1,729 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>軍人将棋オンライン</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Shippori+Mincho+B1:wght@600;800&family=Zen+Kaku+Gothic+New:wght@400;700&display=swap">
+<style>
+*{box-sizing:border-box}
+:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+body{margin:0}
+[hidden]{display:none!important}
+
+/* Layout: one narrow column — room bar, a field map (the board) framed by the two commanders, rules folded below */
+:root{
+  --bg:#e3e5da; --surface:#f1f2ea; --ink:#1e2419; --muted:#5d6553; --line:#c4c8b6;
+  --board:#8d9662; --board-line:#737c4c; --river:#6f8f96; --bridge:#a88b5c;
+  --tile:#f4efdf; --tile-shadow:rgba(30,36,25,.35);
+  --red:#9b2c22; --blue:#24476d; --red-soft:rgba(155,44,34,.12); --blue-soft:rgba(36,71,109,.12);
+  --brass:#c99700; --danger:#9b2c22; --ok:#3d7a3a;
+  --f-display:"Shippori Mincho B1","Hiragino Mincho ProN","Yu Mincho",serif;
+  --f-body:"Zen Kaku Gothic New","Hiragino Sans","Yu Gothic",system-ui,sans-serif;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#151912; --surface:#1f251a; --ink:#e4e6da; --muted:#9aa18d; --line:#343c2c;
+  --board:#4a5532; --board-line:#3a4327; --river:#34525a; --bridge:#7a6440;
+  --tile:#ece5d0; --tile-shadow:rgba(0,0,0,.55);
+  --red:#c9503f; --blue:#6a95c4; --red-soft:rgba(201,80,63,.16); --blue-soft:rgba(106,149,196,.16);
+  --brass:#e2b324; --danger:#e06a58; --ok:#7cc06f; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#151912; --surface:#1f251a; --ink:#e4e6da; --muted:#9aa18d; --line:#343c2c;
+  --board:#4a5532; --board-line:#3a4327; --river:#34525a; --bridge:#7a6440;
+  --tile:#ece5d0; --tile-shadow:rgba(0,0,0,.55);
+  --red:#c9503f; --blue:#6a95c4; --red-soft:rgba(201,80,63,.16); --blue-soft:rgba(106,149,196,.16);
+  --brass:#e2b324; --danger:#e06a58; --ok:#7cc06f; color-scheme:dark}
+html,body{height:100%}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:15px;line-height:1.6;padding-inline:16px;padding-block:12px 40px}
+.wrap{max-width:460px;margin:0 auto;display:flex;flex-direction:column;gap:14px}
+header{display:flex;align-items:baseline;justify-content:space-between;gap:12px}
+h1{font-family:var(--f-display);font-weight:800;font-size:1.6rem;letter-spacing:.08em;margin:0;line-height:1.2}
+h1 small{display:block;font-family:var(--f-body);font-weight:400;font-size:.72rem;letter-spacing:.2em;color:var(--muted)}
+h2{font-family:var(--f-display);font-size:1.1rem;margin:0;text-wrap:balance}
+button{font:inherit;cursor:pointer;border-radius:8px;border:1px solid var(--line);background:var(--surface);color:var(--ink);padding:.5em 1em;min-height:42px}
+button.primary{background:var(--ink);color:var(--bg);border-color:var(--ink);font-weight:700}
+button.danger{color:var(--danger);border-color:currentColor;background:transparent}
+button:disabled{opacity:.45;cursor:default}
+button:focus-visible,.cell:focus-visible,summary:focus-visible{outline:3px solid var(--brass);outline-offset:2px}
+.link{background:none;border:none;color:var(--muted);text-decoration:underline;min-height:0;padding:0}
+.note{color:var(--muted);font-size:.85rem}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.notice{border:1px solid var(--line);border-radius:10px;padding:12px 14px;background:var(--surface)}
+/* players */
+.player{display:flex;align-items:center;gap:10px;padding:8px 12px;border-radius:10px;border:1px solid transparent}
+.player .dot{width:12px;height:12px;border-radius:3px;flex:none}
+.player.A .dot{background:var(--red)} .player.B .dot{background:var(--blue)}
+.player .name{font-weight:700;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.player .info{margin-left:auto;font-size:.8rem;color:var(--muted);font-variant-numeric:tabular-nums;white-space:nowrap}
+.player.turn{border-color:var(--brass);background:var(--surface)}
+.player.turn .info::before{content:"手番 ・ ";color:var(--brass);font-weight:700}
+/* board */
+.board{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:3px;padding:6px;background:var(--board-line);border-radius:6px;user-select:none;-webkit-user-select:none}
+.cell{position:relative;min-width:0;aspect-ratio:1/1.08;background:var(--board);border-radius:3px;display:grid;place-items:center;padding:3px}
+.cell.hq{grid-column:span 2;aspect-ratio:2/1.08;background:repeating-linear-gradient(45deg,var(--board) 0 8px,var(--board-line) 8px 10px)}
+.cell.hq::after{content:"司令部";position:absolute;top:1px;left:6px;z-index:2;font-size:.6rem;letter-spacing:.15em;color:var(--tile);opacity:.85}
+.cell.water{aspect-ratio:auto;height:22px;background:var(--river);border-radius:2px}
+.cell.bridge{aspect-ratio:auto;height:22px;background:repeating-linear-gradient(90deg,var(--bridge) 0 5px,var(--board-line) 5px 6px)}
+.cell.bridge::after{content:"突入口";font-size:.58rem;color:var(--tile);letter-spacing:.1em}
+.cell.myzone{box-shadow:inset 0 0 0 1px rgba(255,255,255,.12)}
+.cell.last-from{box-shadow:inset 0 0 0 2px rgba(255,255,255,.5)}
+.cell.last-to{box-shadow:inset 0 0 0 2px var(--brass)}
+.cell.can::before{content:"";width:28%;aspect-ratio:1;border-radius:50%;background:var(--brass);opacity:.85;position:absolute}
+.cell.hit::before{content:"";position:absolute;inset:1px;z-index:2;pointer-events:none;border:3px solid var(--brass);border-radius:5px}
+.cell.clickable{cursor:pointer}
+.tile{width:100%;height:100%;max-width:64px;border-radius:5px;background:var(--tile);box-shadow:0 2px 0 var(--tile-shadow);display:grid;place-items:center;font-family:var(--f-display);font-weight:800;font-size:clamp(.66rem,3.4vw,.95rem);line-height:1.05;text-align:center;letter-spacing:-.02em;position:relative;z-index:1;overflow:hidden;word-break:keep-all}
+.hq .tile{max-width:64px}
+.tile.A{color:var(--red);border-bottom:3px solid var(--red)}
+.tile.B{color:var(--blue);border-bottom:3px solid var(--blue)}
+.tile.long{font-size:clamp(.56rem,2.7vw,.78rem)}
+.tile.back{color:var(--tile);border:none}
+.tile.back.A{background:var(--red)} .tile.back.B{background:var(--blue)}
+.tile.back::after{content:"★";font-size:1.1em;opacity:.8}
+.tile.reveal{opacity:.92}
+.tile.reveal::after{content:none}
+.tile.sel{outline:3px solid var(--brass);outline-offset:1px;transform:translateY(-2px)}
+@media (prefers-reduced-motion:no-preference){.tile{transition:transform .12s}}
+.status{font-size:.95rem;min-height:1.6em}
+.status strong{font-family:var(--f-display)}
+.lastmsg{font-size:.88rem;color:var(--muted);border-left:3px solid var(--brass);padding-left:10px}
+.banner{font-family:var(--f-display);font-size:1.25rem;text-align:center;padding:14px;border-radius:10px;background:var(--surface);border:1px solid var(--brass)}
+.lost{font-size:.82rem;color:var(--muted)}
+.lost b{font-family:var(--f-display);color:var(--ink);font-weight:600;margin-right:4px}
+details{border-top:1px solid var(--line);padding-top:10px}
+summary{cursor:pointer;font-family:var(--f-display);font-weight:600}
+.rules{font-size:.86rem}
+.rules h3{font-size:.9rem;margin:14px 0 4px;font-family:var(--f-display)}
+.rules ul{margin:0;padding-left:1.2em}
+.rules table{border-collapse:collapse;width:100%;font-size:.82rem}
+.rules td{border-bottom:1px solid var(--line);padding:4px 6px;vertical-align:top}
+.rules td:first-child{white-space:nowrap;font-weight:700;font-family:var(--f-display)}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(16px + env(safe-area-inset-bottom,0px));background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:8px;font-size:.88rem;max-width:calc(100% - 32px);z-index:9}
+.chip{display:inline-block;font-size:.72rem;letter-spacing:.06em;padding:.1em .6em;border-radius:99px;border:1px solid currentColor;white-space:nowrap}
+.net-online{color:var(--ok)} .net-waiting,.net-opening,.net-connecting{color:var(--brass)} .net-offline,.net-error{color:var(--danger)}
+.roombar{display:flex;flex-direction:column;gap:6px;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--surface)}
+.roombar .top{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.roombar .label{font-size:.72rem;letter-spacing:.15em;color:var(--muted)}
+.code{font-family:ui-monospace,"SFMono-Regular",Menlo,Consolas,monospace;font-size:1.25rem;font-weight:700;letter-spacing:.18em;font-variant-numeric:tabular-nums}
+.roombar #copyBtn{margin-left:auto;min-height:36px;padding:.3em .9em;font-size:.85rem}
+.roombar #netMsg{font-size:.82rem;color:var(--muted)}
+.roombar #netMsg:empty{display:none}
+.home{display:flex;flex-direction:column;gap:14px}
+.lead{margin:0}
+.card{display:flex;flex-direction:column;gap:8px;align-items:flex-start;padding:14px;border:1px solid var(--line);border-radius:10px;background:var(--surface)}
+.card .note{margin:0}
+#codeInput{font:inherit;font-family:ui-monospace,"SFMono-Regular",Menlo,Consolas,monospace;font-size:1.15rem;letter-spacing:.2em;text-transform:uppercase;width:9.5em;max-width:100%;min-height:42px;padding:.3em .6em;border-radius:8px;border:1px solid var(--line);background:var(--bg);color:var(--ink)}
+#codeInput:focus-visible{outline:3px solid var(--brass);outline-offset:1px}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+.player .side{font-weight:400;font-size:.75rem;color:var(--muted);margin-left:8px}
+.leave{justify-content:flex-end;margin-top:4px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>軍人将棋<small>ONLINE ・ 23枚制</small></h1>
+  </header>
+  <section class="roombar" id="roombar" hidden>
+    <div class="top">
+      <span class="label">部屋コード</span><span class="code" id="roomCode"></span><span class="chip" id="netChip"></span>
+      <button id="copyBtn">招待リンクをコピー</button>
+    </div>
+    <div id="netMsg"></div>
+  </section>
+  <main id="app"><p class="note">読み込み中…</p></main>
+  <details id="rulesBox">
+    <summary>ルール（一般的な23枚制）</summary>
+    <div class="rules">
+      <h3>盤と配置</h3>
+      <ul>
+        <li>自陣は横6×縦4マス。最奥中央の2マス分が総司令部（1マスとして扱います）。</li>
+        <li>23枚を自陣にすべて並べます。軍旗は最奥列に置けません。</li>
+        <li>中央の川は左右2か所の突入口からしか渡れません（飛行機は除く）。突入口を通ると、1歩で相手陣の最前列に入れます。</li>
+      </ul>
+      <h3>動き方</h3>
+      <table><tbody>
+        <tr><td>将官・佐官・尉官・スパイ</td><td>縦横に1マス</td></tr>
+        <tr><td>タンク</td><td>縦横に1マス、または前へ2マス</td></tr>
+        <tr><td>騎兵</td><td>縦横に2マスまで</td></tr>
+        <tr><td>工兵</td><td>縦横にどこまでも（飛び越え不可）</td></tr>
+        <tr><td>飛行機</td><td>縦にどこまでも駒を飛び越えて進める。横は1マス</td></tr>
+        <tr><td>地雷・軍旗</td><td>動けません</td></tr>
+      </tbody></table>
+      <h3>強弱</h3>
+      <table><tbody>
+        <tr><td>階級</td><td>大将＞中将＞少将＞大佐＞中佐＞少佐＞大尉＞中尉＞少尉</td></tr>
+        <tr><td>飛行機</td><td>将官以外すべてに勝つ</td></tr>
+        <tr><td>タンク</td><td>佐官・尉官・騎兵・スパイに勝つ。将官・飛行機・工兵・地雷に負ける</td></tr>
+        <tr><td>騎兵</td><td>工兵・スパイにだけ勝つ</td></tr>
+        <tr><td>工兵</td><td>タンク・地雷・スパイに勝つ</td></tr>
+        <tr><td>スパイ</td><td>自分から攻めたときだけ大将に勝つ。それ以外は全敗</td></tr>
+        <tr><td>地雷</td><td>飛行機と工兵以外を倒す（地雷は残る）</td></tr>
+        <tr><td>軍旗</td><td>すぐ後ろにある味方の駒と同じ強さ。後ろが空なら最弱</td></tr>
+        <tr><td>同じ駒</td><td>相討ちで両方消える</td></tr>
+      </tbody></table>
+      <h3>勝ち負け</h3>
+      <ul>
+        <li>将官か佐官で相手の総司令部に入れば勝ち。</li>
+        <li>自分の手番に動かせる駒がなくなったら負け。投了もできます。</li>
+      </ul>
+      <h3>審判と通信について</h3>
+      <ul>
+        <li>2人のブラウザを直接つないで対局します。アカウント登録は要りません。</li>
+        <li>駒の正体はそれぞれの端末にだけ保存され、相手には送られません。対局開始時に配置の暗号化した控えを交換し、駒がぶつかったときだけその2枚を照合して判定します。</li>
+        <li>対局の続きは同じ端末・同じブラウザでのみ再開できます。ページを閉じても、もう一度開けば部屋に戻れます。</li>
+        <li>駒がぶつかったときの判定には、相手もページを開いている必要があります。</li>
+      </ul>
+    </div>
+  </details>
+</div>
+<div class="toast" id="toast" hidden></div>
+<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+<script>
+"use strict";
+/* ---------- rules ---------- */
+const SET=[["大将",1],["中将",1],["少将",1],["大佐",1],["中佐",1],["少佐",1],["大尉",2],["中尉",2],["少尉",2],["飛行機",2],["タンク",2],["騎兵",1],["工兵",2],["地雷",2],["スパイ",1],["軍旗",1]];
+const ALLTYPES=SET.flatMap(([t,n])=>Array(n).fill(t));
+const SHO=["大将","中将","少将"], SA=["大佐","中佐","少佐"], HQ_TAKERS=[...SHO,...SA];
+const RANK={大将:9,中将:8,少将:7,大佐:6,中佐:5,少佐:4,大尉:3,中尉:2,少尉:1};
+const isOff=t=>t in RANK;
+const rowOf=n=>Math.floor(n/6), colOf=n=>n%6;
+const isHQcell=(r,c)=>(r===0||r===8)&&(c===2||c===3);
+const canon=(r,c)=>r*6+((r===0||r===8)&&c===3?2:c);
+const isHQnode=n=>n===2||n===50;
+const hqOf=s=>s==="A"?50:2;
+const other=s=>s==="A"?"B":"A";
+const backRow=s=>s==="A"?8:0;
+const fwd=s=>s==="A"?-1:1;
+const SIDE_NAME={A:"紅",B:"藍"};
+function nodesOf(side){const rows=side==="A"?[5,6,7,8]:[0,1,2,3];const out=[];for(const r of rows)for(let c=0;c<6;c++){if(isHQcell(r,c)&&c===3)continue;out.push(r*6+c)}return out}
+
+function beats(x,y){
+  if(isOff(x)&&isOff(y))return RANK[x]>RANK[y];
+  if(x==="飛行機")return !SHO.includes(y);
+  if(y==="飛行機")return SHO.includes(x);
+  if(x==="タンク")return y!=="工兵"&&!SHO.includes(y);
+  if(y==="タンク")return SHO.includes(x)||x==="工兵";
+  if(x==="工兵")return false;
+  if(y==="工兵")return true;
+  if(x==="騎兵")return false;
+  if(y==="騎兵")return true;
+  return false;
+}
+/* 'A' attacker wins, 'D' defender wins, 'T' both removed */
+function fight(a,d){
+  if(d==="none")return "A";
+  if(a===d)return "T";
+  if(d==="地雷")return(a==="飛行機"||a==="工兵")?"A":"D";
+  if(a==="スパイ")return d==="大将"?"A":"D";
+  if(d==="スパイ")return "A";
+  return beats(a,d)?"A":"D";
+}
+function rays(board,from,dr,dc,max,jump,side){
+  const out=new Set();
+  const starts=isHQnode(from)?[from,from+1]:[from];
+  for(const s of starts){
+    let r=rowOf(s),c=colOf(s);
+    for(let k=0;k<max;k++){
+      r+=dr;c+=dc;
+      if(r<0||r>8||c<0||c>5)break;
+      if(r===4){if(c===1||c===4||jump){r+=dr;if(r<0||r>8)break}else break}
+      const n=canon(r,c);
+      if(n===from)continue;
+      const occ=board[n];
+      if(occ){if(occ[0]!==side)out.add(n);if(jump)continue;break}
+      out.add(n);
+      if(isHQnode(n)&&!jump)break;
+    }
+  }
+  return out;
+}
+const DIRS=[[1,0],[-1,0],[0,1],[0,-1]];
+function genMoves(board,from,type,side){
+  const out=new Set();const add=s=>s.forEach(x=>out.add(x));
+  if(type==="地雷"||type==="軍旗")return out;
+  if(type==="工兵"){DIRS.forEach(([a,b])=>add(rays(board,from,a,b,8,false,side)));return out}
+  if(type==="騎兵"){DIRS.forEach(([a,b])=>add(rays(board,from,a,b,2,false,side)));return out}
+  if(type==="飛行機"){add(rays(board,from,1,0,8,true,side));add(rays(board,from,-1,0,8,true,side));add(rays(board,from,0,1,1,false,side));add(rays(board,from,0,-1,1,false,side));return out}
+  DIRS.forEach(([a,b])=>add(rays(board,from,a,b,1,false,side)));
+  if(type==="タンク")add(rays(board,from,fwd(side),0,2,false,side));
+  return out;
+}
+function flagRear(board,node,side,types){
+  const r=rowOf(node)+(side==="A"?1:-1),c=colOf(node);
+  if(r<0||r>8)return{idx:null,type:"none"};
+  const idx=canon(r,c),pid=board[idx];
+  if(pid&&pid[0]===side)return{idx,pid,type:types[pid]};
+  return{idx,type:"none"};
+}
+
+/* ---------- crypto ---------- */
+async function sha(s){const b=await crypto.subtle.digest("SHA-256",new TextEncoder().encode(s));return[...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,"0")).join("")}
+const commitStr=(gid,pid,type,salt)=>gid+"|"+pid+"|"+type+"|"+salt;
+function salt(){const a=new Uint8Array(16);crypto.getRandomValues(a);return[...a].map(x=>x.toString(16).padStart(2,"0")).join("")}
+async function checkReveal(g,pid,rv){if(!rv||!g.commits||!g.commits[pid[0]])return false;return(await sha(commitStr(g.gid,pid,rv.type,rv.salt)))===g.commits[pid[0]][pid]}
+function historyOK(g,pid,type){
+  for(const m of(g.moves||[])){if(m.p!==pid)continue;if(!genMoves([],m.f,type,pid[0]).has(m.t))return false}
+  return true;
+}
+
+/* ---------- storage ---------- */
+function lsGet(k){try{return localStorage.getItem(k)}catch{return null}}
+function lsSet(k,v){try{localStorage.setItem(k,v)}catch{}}
+function lsDel(k){try{localStorage.removeItem(k)}catch{}}
+function lsJSON(k){const v=lsGet(k);if(!v)return null;try{return JSON.parse(v)}catch{return null}}
+const clone=o=>JSON.parse(JSON.stringify(o));
+const isObj=o=>o&&typeof o==="object"&&!Array.isArray(o);
+function deepMerge(t,p){for(const k in p){if(isObj(p[k])&&isObj(t[k]))deepMerge(t[k],p[k]);else t[k]=clone(p[k])}return t}
+function esc(s){return String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]))}
+
+/* ---------- state ---------- */
+const $app=document.getElementById("app");
+const CODE_CHARS="ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+const PEER_PREFIX="gunjin-shogi-room-";
+let R=null;      // {code, role:"host"|"guest", token}
+let G=null;      // shared game state
+let PRIV=null;   // my secret placement {gid, side, pieces}
+const NET={peer:null,conn:null,status:"idle",msg:"",timer:null,stopped:false};
+const S={sel:null,setupArr:null,setupSel:null,handled:{},resign:false,leave:false,busy:false,again:false,full:false};
+
+function newCode(){const a=new Uint8Array(6);crypto.getRandomValues(a);return[...a].map(x=>CODE_CHARS[x%CODE_CHARS.length]).join("")}
+function normCode(s){return String(s||"").toUpperCase().replace(/[^A-Z0-9]/g,"").slice(0,6)}
+function freshGame(players,v){return{gid:R.code+"-"+Date.now().toString(36),v:v||1,players,ready:{A:false,B:false},commits:{},init:{},board:null,moves:[],pending:[],last:[],turn:"A",moveNo:0,winner:null,reason:null,final:{}}}
+function saveG(){if(R&&G)lsSet("gj-g-"+R.code,JSON.stringify(G))}
+function loadPriv(){PRIV=G?lsJSON("gj-p-"+G.gid):null;S.setupArr=null;S.setupSel=null;S.sel=null;S.handled={};S.resign=false}
+function toast(t){const el=document.getElementById("toast");el.textContent=t;el.hidden=false;clearTimeout(toast.t);toast.t=setTimeout(()=>el.hidden=true,3600)}
+
+/* ---------- sync ---------- */
+function send(m){if(NET.conn&&NET.conn.open){try{NET.conn.send(m)}catch(e){console.error(e)}}}
+function update(patch){G=deepMerge(clone(G),patch);G.v++;saveG();send({t:"state",g:G});afterChange()}
+function replaceGame(ng){G=ng;saveG();loadPriv();send({t:"state",g:G});afterChange()}
+function mergeIn(o){
+  if(!o||!o.gid)return;
+  if(!G){G=clone(o);saveG();loadPriv();afterChange();return}
+  const prevGid=G.gid;
+  let base,oth;
+  if(o.v>G.v){base=clone(o);oth=G}else{base=clone(G);oth=o}
+  let changed=false;
+  if(base.gid===oth.gid){
+    for(const s of["A","B"]){
+      if(oth.ready&&oth.ready[s]&&!(base.ready&&base.ready[s])){base.ready[s]=true;base.commits[s]=clone(oth.commits[s]);base.init[s]=clone(oth.init[s]);changed=true}
+      if(oth.final&&oth.final[s]&&!(base.final&&base.final[s])){base.final=base.final||{};base.final[s]=clone(oth.final[s]);changed=true}
+    }
+    if(oth.players&&oth.players.B&&!base.players.B){base.players.B=oth.players.B;changed=true}
+  }
+  if(changed)base.v=Math.max(G.v,o.v)+1;
+  const adopted=changed||o.v>G.v;
+  G=base;
+  if(adopted){saveG();if(G.gid!==prevGid)loadPriv();afterChange()}
+  if(G.v!==o.v||changed)send({t:"state",g:G});
+}
+function afterChange(){render();react()}
+
+/* ---------- network ---------- */
+function setNet(status,msg){NET.status=status;NET.msg=msg||"";renderNet()}
+function retry(fn,ms){clearTimeout(NET.timer);if(!NET.stopped)NET.timer=setTimeout(fn,ms)}
+function makePeer(id){
+  if(typeof Peer==="undefined"){setNet("error","通信ライブラリを読み込めませんでした。インターネット接続を確認して、ページを開き直してください。");return null}
+  const p=id?new Peer(id,{debug:0}):new Peer({debug:0});
+  p.on("disconnected",()=>{if(!NET.stopped&&!p.destroyed)retry(()=>{try{p.reconnect()}catch{}},2000)});
+  return p;
+}
+function startNet(){
+  NET.stopped=false;
+  if(NET.peer){try{NET.peer.destroy()}catch{}}
+  NET.conn=null;
+  if(R.role==="host"){
+    setNet("opening","部屋を開いています…");
+    const p=makePeer(PEER_PREFIX+R.code);if(!p)return;NET.peer=p;
+    p.on("open",()=>setNet("waiting","相手の接続を待っています"));
+    p.on("connection",c=>attach(c));
+    p.on("error",e=>{
+      if(e.type==="unavailable-id"){setNet("opening","部屋を開き直しています…");retry(startNet,4000)}
+      else if(e.type==="peer-unavailable"){}
+      else{console.error(e);setNet("error","接続に問題が起きました。再試行しています…");retry(startNet,5000)}
+    });
+  }else{
+    setNet("connecting","相手の部屋に接続しています…");
+    const p=makePeer(null);if(!p)return;NET.peer=p;
+    p.on("open",()=>connectHost());
+    p.on("error",e=>{
+      if(e.type==="peer-unavailable"){setNet("offline","部屋が見つかりません。相手が部屋を開いているか確認してください。再試行しています…");retry(connectHost,5000)}
+      else{console.error(e);setNet("error","接続に問題が起きました。再試行しています…");retry(startNet,5000)}
+    });
+  }
+}
+function connectHost(){
+  const p=NET.peer;if(!p||p.destroyed||NET.stopped||S.full)return;
+  if(p.disconnected){try{p.reconnect()}catch{}retry(connectHost,3000);return}
+  if(NET.conn&&NET.conn.open)return;
+  setNet("connecting","相手の部屋に接続しています…");
+  attach(p.connect(PEER_PREFIX+R.code,{reliable:true}));
+}
+function attach(c){
+  c.on("open",()=>{
+    if(NET.conn&&NET.conn!==c){try{NET.conn.close()}catch{}}
+    NET.conn=c;clearTimeout(NET.timer);
+    setNet("online","接続中");
+    c.send({t:"hello",token:R.token,g:G});
+  });
+  c.on("data",m=>onData(c,m));
+  c.on("close",()=>{
+    if(NET.conn!==c)return;
+    NET.conn=null;
+    if(R&&R.role==="host")setNet("waiting","相手が切断しました。再接続を待っています");
+    else{setNet("offline","接続が切れました。再接続しています…");retry(connectHost,3000)}
+  });
+  c.on("error",e=>console.error(e));
+}
+function onData(c,m){
+  if(!m||typeof m!=="object")return;
+  if(m.t==="hello"){
+    if(R.role==="host"){
+      if(G&&G.players.B&&G.players.B!==m.token){try{c.send({t:"full"})}catch{}setTimeout(()=>c.close(),300);if(NET.conn===c)NET.conn=null;return}
+      if(m.g)mergeIn(m.g);
+      if(G&&!G.players.B)update({players:{B:m.token}});
+      else send({t:"state",g:G});
+    }else{
+      if(m.g)mergeIn(m.g);
+    }
+  }else if(m.t==="state"){
+    if(R.role==="guest"&&m.g&&m.g.players&&m.g.players.B&&m.g.players.B!==R.token){showFull();return}
+    mergeIn(m.g);
+  }else if(m.t==="full"){showFull()}
+}
+function showFull(){S.full=true;NET.stopped=true;clearTimeout(NET.timer);setNet("error","この部屋にはすでに2人そろっています。");render()}
+document.addEventListener("visibilitychange",()=>{
+  if(document.visibilityState!=="visible"||!R||NET.stopped)return;
+  const p=NET.peer;
+  if(!p||p.destroyed){startNet();return}
+  if(p.disconnected){try{p.reconnect()}catch{}}
+  if(R.role==="guest"&&!(NET.conn&&NET.conn.open))retry(connectHost,500);
+});
+
+/* ---------- referee logic (runs on each player's own device) ---------- */
+const mySide=()=>{if(!G||!R)return null;const P=G.players||{};return P.A===R.token?"A":P.B===R.token?"B":null};
+function boardOf(g){
+  if(Array.isArray(g.board))return g.board;
+  const b=Array(54).fill(null);
+  for(const s of["A","B"]){const m=(g.init||{})[s]||{};for(const pid in m)b[m[pid]]=pid}
+  return b;
+}
+const bothReady=g=>!!(g.ready&&g.ready.A&&g.ready.B);
+const myTypes=()=>{const t={};if(PRIV)for(const p in PRIV.pieces)t[p]=PRIV.pieces[p].type;return t};
+const once=k=>{k=G.gid+k;if(S.handled[k])return false;S.handled[k]=true;return true};
+
+async function react(){
+  if(!G||!mySide()||S.busy)return;
+  S.busy=true;
+  try{await resolvePending();await verifyLast();await checkNoMoves();await revealAtEnd()}
+  catch(e){console.error(e)}
+  finally{S.busy=false}
+}
+async function resolvePending(){
+  const g=G,side=mySide(),p=(g.pending||[])[0];
+  if(!p||g.winner||p.by===side||!PRIV)return;
+  if(!once("res"+g.moveNo))return;
+  const board=boardOf(g);
+  if(board[p.to]!==p.def||board[p.from]!==p.atk)return;
+  const ok=await checkReveal(g,p.atk,p.reveal)&&genMoves(board,p.from,p.reveal.type,p.by).has(p.to)&&historyOK(g,p.atk,p.reveal.type);
+  if(G.gid!==g.gid)return;
+  if(!ok){update({pending:[],winner:side,reason:"cheat"});return}
+  const types=myTypes();
+  const defType=types[p.def];let eff=defType,rear=null;
+  if(defType==="軍旗"){const fr=flagRear(board,p.to,side,types);eff=fr.type;if(fr.pid)rear={pid:fr.pid,type:fr.type,salt:PRIV.pieces[fr.pid].salt}}
+  const out=fight(p.reveal.type,eff);
+  const nb=[...board];
+  if(out==="A"){nb[p.to]=p.atk;nb[p.from]=null}
+  else if(out==="D"){nb[p.from]=null}
+  else{nb[p.from]=null;nb[p.to]=null}
+  const upd={board:nb,moves:[...(g.moves||[]),{p:p.atk,f:p.from,t:p.to}],pending:[],turn:side,moveNo:(g.moveNo||0)+1,
+    last:[{kind:"battle",by:p.by,from:p.from,to:p.to,atk:p.atk,def:p.def,outcome:out,defReveal:{type:defType,salt:PRIV.pieces[p.def].salt},rearReveal:rear}]};
+  if(out==="A"&&p.to===hqOf(side)&&HQ_TAKERS.includes(p.reveal.type)){upd.winner=p.by;upd.reason="hq"}
+  update(upd);
+}
+async function verifyLast(){
+  const g=G,side=mySide(),l=(g.last||[])[0];
+  if(!l||!PRIV)return;
+  if(!once("ver"+g.moveNo))return;
+  const opp=other(side);let bad=false;
+  if(l.kind==="hq"&&l.by===opp){
+    bad=!(await checkReveal(g,l.pid,l.reveal))||!HQ_TAKERS.includes(l.reveal.type)||!historyOK(g,l.pid,l.reveal.type);
+  }else if(l.kind==="battle"&&l.by===side){
+    const myT=myTypes()[l.atk];
+    if(!(await checkReveal(g,l.def,l.defReveal)))bad=true;
+    else{
+      let eff=l.defReveal.type;
+      if(eff==="軍旗"){
+        const b=boardOf(g),r=rowOf(l.to)+(opp==="A"?1:-1),idx=canon(r,colOf(l.to)),occ=b[idx];
+        if(l.rearReveal){bad=!(await checkReveal(g,l.rearReveal.pid,l.rearReveal))||l.rearReveal.pid!==occ;eff=l.rearReveal.type}
+        else{if(occ&&occ[0]===opp)bad=true;eff="none"}
+      }
+      if(!bad&&fight(myT,eff)!==l.outcome)bad=true;
+    }
+  }
+  if(G.gid!==g.gid)return;
+  if(bad&&(!g.winner||g.winner===opp))update({winner:side,reason:"cheat"});
+}
+async function checkNoMoves(){
+  const g=G,side=mySide();
+  if(!bothReady(g)||g.winner||g.turn!==side||(g.pending||[]).length||!PRIV)return;
+  const board=boardOf(g),types=myTypes();
+  if(board.some((pid,n)=>pid&&pid[0]===side&&genMoves(board,n,types[pid],side).size>0))return;
+  if(!once("nm"+g.moveNo))return;
+  update({winner:other(side),reason:"nomoves"});
+}
+async function revealAtEnd(){
+  const g=G,side=mySide();
+  if(!g.winner||!PRIV||(g.final&&g.final[side]))return;
+  if(!once("fin"))return;
+  update({final:{[side]:myTypes()}});
+}
+
+/* ---------- actions ---------- */
+function randomArr(side){
+  const nodes=nodesOf(side);
+  for(;;){const a=[...ALLTYPES];for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]]}
+    if(rowOf(nodes[a.indexOf("軍旗")])!==backRow(side))return a}
+}
+async function confirmSetup(){
+  const g=G,side=mySide(),nodes=nodesOf(side),arr=S.setupArr;
+  if(rowOf(nodes[arr.indexOf("軍旗")])===backRow(side)){toast("軍旗は最奥の列に置けません");return}
+  const pieces={},commits={},init={};
+  for(let i=0;i<nodes.length;i++){const pid=side+i,sl=salt();pieces[pid]={type:arr[i],salt:sl};commits[pid]=await sha(commitStr(g.gid,pid,arr[i],sl));init[pid]=nodes[i]}
+  if(G.gid!==g.gid)return;
+  PRIV={gid:g.gid,side,pieces};
+  lsSet("gj-p-"+g.gid,JSON.stringify(PRIV));
+  if(lsGet("gj-p-"+g.gid)===null)toast("この端末に配置を保存できませんでした。ページを閉じると続きができなくなります。");
+  update({commits:{[side]:commits},init:{[side]:init},ready:{[side]:true}});
+}
+function doMove(from,to){
+  const g=G,side=mySide(),board=boardOf(g),pid=board[from],type=myTypes()[pid];
+  S.sel=null;
+  const target=board[to];
+  if(target){update({pending:[{by:side,atk:pid,from,to,def:target,reveal:{type,salt:PRIV.pieces[pid].salt}}]});return}
+  const nb=[...board];nb[to]=pid;nb[from]=null;
+  const upd={board:nb,moves:[...(g.moves||[]),{p:pid,f:from,t:to}],turn:other(side),moveNo:(g.moveNo||0)+1,last:[{kind:"move",by:side,from,to}]};
+  if(to===hqOf(other(side))&&HQ_TAKERS.includes(type)){upd.last=[{kind:"hq",by:side,from,to,pid,reveal:{type,salt:PRIV.pieces[pid].salt}}];upd.winner=side;upd.reason="hq"}
+  update(upd);
+}
+
+/* ---------- room ---------- */
+function enterRoom(code,role){
+  code=normCode(code);
+  const prev=lsJSON("gj-room");
+  const token=(prev&&prev.code===code&&prev.role===role&&prev.token)||("t"+salt());
+  R={code,role,token};lsSet("gj-room",JSON.stringify(R));
+  G=lsJSON("gj-g-"+code);
+  if(G&&mySide()===null)G=null;
+  if(!G&&role==="host"){G=freshGame({A:token,B:null});saveG()}
+  S.full=false;loadPriv();
+  if(location.hash.slice(1)!==code){try{history.replaceState(null,"","#"+code)}catch{}}
+  render();startNet();react();
+}
+function leaveRoom(){
+  NET.stopped=true;clearTimeout(NET.timer);
+  if(NET.peer){try{NET.peer.destroy()}catch{}}
+  NET.peer=null;NET.conn=null;
+  if(R){lsDel("gj-g-"+R.code)}
+  lsDel("gj-room");R=null;G=null;PRIV=null;S.leave=false;
+  try{history.replaceState(null,"",location.pathname+location.search)}catch{}
+  renderHome();
+}
+function shareURL(){if(!/^https?:/.test(location.protocol))return "";return location.origin+location.pathname+location.search+"#"+R.code}
+
+/* ---------- render ---------- */
+const REASON={hq:"総司令部を占領",nomoves:"動かせる駒がなくなった",resign:"投了",cheat:"不正なデータを検出"};
+function renderHome(prefill){
+  document.getElementById("roombar").hidden=true;
+  $app.innerHTML=`
+  <section class="home">
+    <p class="lead">アカウント不要。部屋をつくって、表示された部屋コードかリンクを相手に送るだけで対局できます。</p>
+    <div class="card">
+      <h2>部屋をつくる</h2>
+      <p class="note">あなたが紅（先手）になります。</p>
+      <button class="primary" id="hostBtn">部屋をつくる</button>
+    </div>
+    <div class="card">
+      <h2>部屋に入る</h2>
+      <p class="note">相手から届いた6文字の部屋コードを入力します。</p>
+      <form class="row" id="joinForm" autocomplete="off">
+        <label class="sr" for="codeInput">部屋コード</label>
+        <input id="codeInput" inputmode="latin" autocapitalize="characters" maxlength="6" placeholder="例 K7QM2P" value="${esc(prefill||"")}">
+        <button class="primary" type="submit">入る</button>
+      </form>
+    </div>
+  </section>`;
+}
+function renderNet(){
+  const bar=document.getElementById("roombar");
+  if(!R){bar.hidden=true;return}
+  bar.hidden=false;
+  document.getElementById("roomCode").textContent=R.code;
+  const chip=document.getElementById("netChip");
+  chip.className="chip net-"+NET.status;
+  chip.textContent={online:"接続中",waiting:"相手待ち",opening:"準備中",connecting:"接続中…",offline:"切断",error:"エラー",idle:"—"}[NET.status]||"";
+  document.getElementById("netMsg").textContent=NET.status==="online"?"":NET.msg;
+  document.getElementById("copyBtn").textContent=shareURL()?"招待リンクをコピー":"コードをコピー";
+}
+function render(){
+  renderNet();
+  if(!R)return;
+  if(S.full){$app.innerHTML=`<p class="notice">この部屋にはすでに2人そろっています。部屋コードが正しいか確認してください。</p><div class="row"><button id="leaveYes">ホームに戻る</button></div>`;return}
+  if(!G){$app.innerHTML=`<p class="notice">相手の部屋に接続すると盤面が表示されます。</p>${leaveControls()}`;return}
+  const g=G,side=mySide(),viewSide=side||"A",opp=other(viewSide);
+  const ready=g.ready||{},started=bothReady(g),P=g.players||{};
+  const inSetup=side&&!ready[side];
+  if(inSetup&&!S.setupArr){const d=lsJSON("gj-draft-"+g.gid);S.setupArr=(Array.isArray(d)&&d.length===23)?d:randomArr(side)}
+  const board=boardOf(g),types=myTypes(),fin=g.final||{};
+  const pend=(g.pending||[])[0],last=(g.last||[])[0];
+  const myTurn=started&&!g.winner&&side&&g.turn===side&&!pend&&PRIV;
+  let legal=new Set();
+  if(myTurn&&S.sel!=null&&board[S.sel])legal=genMoves(board,S.sel,types[board[S.sel]],side);
+  const count=s=>board.filter(p=>p&&p[0]===s).length;
+  const pl=s=>{
+    const isMe=s===side;
+    const nm=isMe?"あなた":(P[s]?"相手":"相手を待っています");
+    const info=started?`残り ${count(s)}枚`:(ready[s]?"配置完了":(P[s]?"配置中":""));
+    return `<div class="player ${s}${started&&!g.winner&&g.turn===s?" turn":""}"><span class="dot"></span><span class="name">${nm}<span class="side">${SIDE_NAME[s]}${s==="A"?"・先手":"・後手"}</span></span><span class="info">${info}</span></div>`;
+  };
+  let h=pl(opp);
+  h+=`<div class="board" id="board" role="grid" aria-label="盤面">`;
+  const setupNodes=inSetup?nodesOf(side):[];
+  for(let dr=0;dr<9;dr++)for(let dc=0;dc<6;dc++){
+    const r=viewSide==="B"?8-dr:dr,c=viewSide==="B"?5-dc:dc;
+    if(r===4){h+=(c===1||c===4)?`<div class="cell bridge"></div>`:`<div class="cell water"></div>`;continue}
+    if(isHQcell(r,c)&&dc===3)continue;
+    const n=canon(r,c),cls=["cell"];if(isHQnode(n))cls.push("hq");
+    let tile="";
+    if(inSetup&&setupNodes.includes(n)){
+      const i=setupNodes.indexOf(n),t=S.setupArr[i];
+      tile=`<div class="tile ${side}${t.length>2?" long":""}${S.setupSel===i?" sel":""}">${t}</div>`;cls.push("clickable","myzone");
+    }else{
+      const pid=board[n];
+      if(pid&&(started||pid[0]!==side||!inSetup)){
+        const s=pid[0];
+        if(s===side&&types[pid]){const t=types[pid];tile=`<div class="tile ${s}${t.length>2?" long":""}${S.sel===n?" sel":""}">${t}</div>`;if(myTurn)cls.push("clickable")}
+        else if(fin[s]&&fin[s][pid]){const t=fin[s][pid];tile=`<div class="tile back reveal ${s}${t.length>2?" long":""}">${t}</div>`}
+        else tile=`<div class="tile back ${s}"></div>`;
+      }
+    }
+    if(legal.has(n)){cls.push(board[n]?"hit":"can","clickable")}
+    if(last&&started&&!pend){if(last.from===n)cls.push("last-from");if(last.to===n)cls.push("last-to")}
+    if(pend&&pend.from===n)cls.push("last-from");if(pend&&pend.to===n)cls.push("last-to");
+    h+=`<div class="${cls.join(" ")}" data-n="${n}"${cls.includes("clickable")?` tabindex="0" role="button"`:""}>${tile}</div>`;
+  }
+  h+=`</div>`+pl(viewSide);
+
+  const online=NET.status==="online";
+  let st="";
+  if(g.winner){
+    h+=`<div class="banner">${side?(g.winner===side?"勝ち":"負け"):SIDE_NAME[g.winner]+"の勝ち"}<div class="note">${REASON[g.reason]||""}</div></div>`;
+    if(fin[opp])st="相手の配置を盤上に表示しています。";
+    else st="相手の配置は、相手と接続すると表示されます。";
+  }else if(!side){
+    st="この部屋の参加者ではありません。";
+  }else if(inSetup){
+    st=`<strong>配置</strong>：2つの駒を順にタップすると入れ替わります。軍旗は最奥の列に置けません。`;
+    if(!P.B)st+=`<br>相手の参加を待つあいだに並べておけます。`;
+  }else if(!PRIV){
+    st=`この端末にはあなたの配置データがありません。配置したときと同じ端末・同じブラウザで開いてください。`;
+  }else if(!P.B){
+    st=`相手の参加を待っています。上の部屋コードかリンクを相手に送ってください。`;
+  }else if(!started){
+    st=`相手の配置を待っています。`;
+  }else if(pend){
+    st=pend.by===side?(online?`判定中…`:`攻撃しました。相手と接続すると判定されます。`):`判定中…`;
+  }else if(myTurn){
+    st=S.sel!=null?`動かす先を選んでください。`:`<strong>あなたの手番</strong>です。動かす駒を選んでください。`;
+  }else st=online?`相手の手番です。`:`相手の手番です（相手は未接続）。`;
+  h+=`<div class="status">${st}</div>`;
+
+  if(started&&last&&side&&!pend){
+    let m="";
+    if(last.kind==="move")m=last.by===side?"駒を動かしました。":"相手が駒を動かしました。";
+    else if(last.kind==="hq")m=last.by===side?"総司令部を占領しました。":"総司令部を占領されました。";
+    else if(last.kind==="battle"){
+      if(last.by===side){const t=types[last.atk]||"駒";m=last.outcome==="A"?`あなたの${t}の攻撃が勝ちました。`:last.outcome==="D"?`あなたの${t}が攻撃に失敗し、やられました。`:`あなたの${t}は相討ちになりました。`}
+      else{const t=types[last.def]||"駒";m=last.outcome==="A"?`相手の攻撃で、あなたの${t}がやられました。`:last.outcome==="D"?`あなたの${t}が攻撃を防ぎました。`:`あなたの${t}は相討ちになりました。`}
+    }
+    if(m)h+=`<div class="lastmsg">直前：${m}</div>`;
+  }
+  if(side&&inSetup)h+=`<div class="row"><button id="shuffleBtn">ランダムに並べる</button><button class="primary" id="readyBtn">配置を確定する</button></div>`;
+  if(side&&started&&!g.winner){
+    h+=S.resign?`<div class="row"><span>本当に投了しますか？</span><button class="danger" id="resignYes">投了する</button><button id="resignNo">やめる</button></div>`:`<div class="row"><button class="danger" id="resignBtn">投了</button></div>`;
+  }
+  if(side&&g.winner)h+=`<div class="row"><button class="primary" id="againBtn">同じ相手ともう一局</button></div>`;
+  if(side&&started&&PRIV){
+    const lost=Object.keys(types).filter(p=>!board.includes(p)).map(p=>types[p]);
+    h+=`<div class="lost">あなたが失った駒（${lost.length}）：${lost.length?lost.map(t=>`<b>${t}</b>`).join(""):"なし"}<br>相手が失った駒：${23-count(other(side))}枚</div>`;
+  }
+  h+=leaveControls();
+  $app.innerHTML=h;
+}
+function leaveControls(){
+  return S.leave?`<div class="row leave"><span class="note">部屋を出ると、この対局には戻れなくなります。</span><button class="danger" id="leaveYes">部屋を出る</button><button id="leaveNo">やめる</button></div>`
+    :`<div class="row leave"><button class="link" id="leaveBtn">部屋を出る</button></div>`;
+}
+
+/* ---------- input ---------- */
+document.addEventListener("submit",e=>{
+  if(e.target.id!=="joinForm")return;
+  e.preventDefault();
+  const code=normCode(document.getElementById("codeInput").value);
+  if(code.length!==6){toast("6文字の部屋コードを入力してください");return}
+  enterRoom(code,"guest");
+});
+document.addEventListener("input",e=>{if(e.target.id==="codeInput"){const v=normCode(e.target.value);if(v!==e.target.value)e.target.value=v}});
+document.addEventListener("click",e=>{
+  const t=e.target.closest("button,.cell");if(!t)return;
+  const id=t.id;
+  if(id==="hostBtn")return enterRoom(newCode(),"host");
+  if(id==="copyBtn")return copyInvite();
+  if(id==="leaveBtn"){S.leave=true;return render()}
+  if(id==="leaveNo"){S.leave=false;return render()}
+  if(id==="leaveYes")return leaveRoom();
+  if(!G)return;
+  if(id==="shuffleBtn"){S.setupArr=randomArr(mySide());S.setupSel=null;lsSet("gj-draft-"+G.gid,JSON.stringify(S.setupArr));return render()}
+  if(id==="readyBtn")return confirmSetup();
+  if(id==="resignBtn"){S.resign=true;return render()}
+  if(id==="resignNo"){S.resign=false;return render()}
+  if(id==="resignYes"){S.resign=false;return update({winner:other(mySide()),reason:"resign"})}
+  if(id==="againBtn")return replaceGame(freshGame(clone(G.players),G.v+1));
+  if(t.classList.contains("cell")&&t.dataset.n!=null)return cellClick(+t.dataset.n);
+});
+document.addEventListener("keydown",e=>{if((e.key==="Enter"||e.key===" ")&&e.target.classList&&e.target.classList.contains("cell")){e.preventDefault();e.target.click()}});
+async function copyInvite(){
+  const url=shareURL();
+  const text=url?`軍人将棋で対局しよう！\n${url}\n部屋コード：${R.code}`:R.code;
+  try{await navigator.clipboard.writeText(text);toast(url?"招待リンクをコピーしました":"部屋コードをコピーしました")}
+  catch{toast("コピーできませんでした。部屋コード "+R.code+" を相手に伝えてください")}
+}
+function cellClick(n){
+  const side=mySide();if(!side)return;
+  if(!G.ready||!G.ready[side]){
+    const nodes=nodesOf(side),i=nodes.indexOf(n);if(i<0)return;
+    if(S.setupSel==null)S.setupSel=i;
+    else{const a=S.setupArr;[a[S.setupSel],a[i]]=[a[i],a[S.setupSel]];S.setupSel=null;lsSet("gj-draft-"+G.gid,JSON.stringify(a))}
+    return render();
+  }
+  const board=boardOf(G),types=myTypes();
+  if(!(bothReady(G)&&!G.winner&&G.turn===side&&!(G.pending||[]).length&&PRIV))return;
+  if(S.sel!=null&&S.sel!==n&&genMoves(board,S.sel,types[board[S.sel]],side).has(n))return doMove(S.sel,n);
+  const pid=board[n];
+  S.sel=(pid&&pid[0]===side&&S.sel!==n)?n:null;
+  render();
+}
+
+/* ---------- boot ---------- */
+(function boot(){
+  if(!window.crypto||!crypto.subtle){$app.innerHTML=`<p class="notice">このブラウザでは対局できません。https:// で始まるアドレスで開いてください。</p>`;return}
+  const h=normCode(location.hash.slice(1));
+  const saved=lsJSON("gj-room");
+  if(saved&&saved.code&&(!h||h===saved.code)){enterRoom(saved.code,saved.role);return}
+  if(h.length===6){enterRoom(h,"guest");return}
+  renderHome();
+})();
+</script>
+</body>
+</html>
