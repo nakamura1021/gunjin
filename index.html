@@ -117,6 +117,17 @@ summary{cursor:pointer;font-family:var(--f-display);font-weight:600}
 .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
 .player .side{font-weight:400;font-size:.75rem;color:var(--muted);margin-left:8px}
 .leave{justify-content:flex-end;margin-top:4px}
+.presets{display:flex;flex-direction:column;gap:8px;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--surface)}
+.presets-head{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap}
+.plabel{font-size:.72rem;letter-spacing:.15em;color:var(--muted)}
+.presets .note{margin:0}
+.pchips{display:flex;flex-wrap:wrap;gap:6px}
+.pchip{display:inline-flex;border:1px solid var(--line);border-radius:99px;overflow:hidden;background:var(--bg)}
+.pchip button{border:none;border-radius:0;min-height:38px;padding:.3em .9em;background:transparent}
+.pchip .x{color:var(--muted);padding:.3em .7em;border-left:1px solid var(--line)}
+#presetName{font:inherit;min-height:42px;padding:.3em .6em;border-radius:8px;border:1px solid var(--line);background:var(--bg);color:var(--ink);width:11em;max-width:100%}
+#presetName:focus-visible{outline:3px solid var(--brass);outline-offset:1px}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
 </style>
 </head>
 <body>
@@ -492,7 +503,7 @@ async function confirmSetup(){
   const pieces={},commits={},init={};
   for(let i=0;i<nodes.length;i++){const pid=side+i,sl=salt();pieces[pid]={type:arr[i],salt:sl};commits[pid]=await sha(commitStr(g.gid,pid,arr[i],sl));init[pid]=nodes[i]}
   if(G.gid!==g.gid)return;
-  PRIV={gid:g.gid,side,pieces};
+  PRIV={gid:g.gid,side,pieces};rememberLast(side,arr);
   lsSet("gj-p-"+g.gid,JSON.stringify(PRIV));
   if(lsGet("gj-p-"+g.gid)===null)toast("この端末に配置を保存できませんでした。ページを閉じると続きができなくなります。");
   update({commits:{[side]:commits},init:{[side]:init},ready:{[side]:true}});
@@ -532,6 +543,45 @@ function leaveRoom(){
 }
 function shareURL(){if(!/^https?:/.test(location.protocol))return "";return location.origin+location.pathname+location.search+"#"+R.code}
 
+function setupSide(){const s=G&&mySide();return s&&!(G.ready&&G.ready[s])?s:null}
+function onSetupChanged(){lsSet("gj-draft-"+G.gid,JSON.stringify(S.setupArr))}
+/* ---------- saved placements (kept in this browser, independent of rooms) ---------- */
+function relKey(side,n){if(isHQnode(n))return"hq";const r=rowOf(n),c=colOf(n);return side==="A"?(r-5)+"-"+c:(3-r)+"-"+(5-c)}
+function loadPresets(){try{const v=JSON.parse(localStorage.getItem("gj-presets")||"[]");return Array.isArray(v)?v:[]}catch{return[]}}
+function storePresets(l){try{localStorage.setItem("gj-presets",JSON.stringify(l));return true}catch{return false}}
+function toPreset(side,arr){const m={};nodesOf(side).forEach((n,i)=>m[relKey(side,n)]=arr[i]);return m}
+function fromPreset(side,m){if(!m)return null;const arr=nodesOf(side).map(n=>m[relKey(side,n)]);return[...arr].sort().join()===[...ALLTYPES].sort().join()?arr:null}
+function rememberLast(side,arr){try{localStorage.setItem("gj-last-setup",JSON.stringify(toPreset(side,arr)))}catch{}}
+function lastSetup(side){try{return fromPreset(side,JSON.parse(localStorage.getItem("gj-last-setup")||"null"))}catch{return null}}
+const pEsc=s=>String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+function presetsHTML(){
+  const l=loadPresets();
+  let h=`<section class="presets" aria-label="保存した配置"><div class="presets-head"><span class="plabel">保存した配置</span>`;
+  h+=S.presetForm?`</div><form id="presetForm" class="row" autocomplete="off"><label class="sr" for="presetName">配置の名前</label><input id="presetName" maxlength="16" value="配置${l.length+1}"><button class="primary" type="submit">保存</button><button type="button" id="presetCancel">やめる</button></form>`
+    :`<button id="presetSave">今の配置を保存</button></div>`;
+  if(S.presetDel!=null&&l[S.presetDel])h+=`<div class="row"><span>「${pEsc(l[S.presetDel].name)}」を削除しますか？</span><button class="danger" id="pdelYes">削除する</button><button id="pdelNo">やめる</button></div>`;
+  h+=l.length?`<div class="pchips">${l.map((p,i)=>`<span class="pchip"><button data-preset="${i}">${pEsc(p.name)}</button><button class="x" data-pdel="${i}" aria-label="${pEsc(p.name)}を削除">×</button></span>`).join("")}</div>`
+    :`<p class="note">まだありません。気に入った並びを保存しておくと、次の対局でタップ1回で呼び出せます。</p>`;
+  return h+`</section>`;
+}
+document.addEventListener("click",e=>{
+  const t=e.target.closest("button");if(!t)return;
+  const side=setupSide();if(!side)return;
+  if(t.id==="presetSave"){S.presetForm=true;S.presetDel=null;render();const i=document.getElementById("presetName");if(i){i.focus();i.select()}return}
+  if(t.id==="presetCancel"){S.presetForm=false;return render()}
+  if(t.dataset.preset!=null){const p=loadPresets()[+t.dataset.preset],a=p&&fromPreset(side,p.map);if(a){S.setupArr=a;S.setupSel=null;onSetupChanged();toast(`「${p.name}」の配置に並べました`)}else toast("この配置は読み込めませんでした");return render()}
+  if(t.dataset.pdel!=null){S.presetDel=+t.dataset.pdel;S.presetForm=false;return render()}
+  if(t.id==="pdelYes"){const l=loadPresets();l.splice(S.presetDel,1);storePresets(l);S.presetDel=null;return render()}
+  if(t.id==="pdelNo"){S.presetDel=null;return render()}
+});
+document.addEventListener("submit",e=>{
+  if(e.target.id!=="presetForm")return;e.preventDefault();
+  const side=setupSide();if(!side)return;
+  const name=(document.getElementById("presetName").value||"").trim().slice(0,16)||"配置";
+  const l=loadPresets().filter(p=>p.name!==name);l.unshift({name,map:toPreset(side,S.setupArr)});if(l.length>12)l.length=12;
+  toast(storePresets(l)?`「${name}」を保存しました`:"このブラウザでは保存できませんでした");
+  S.presetForm=false;render();
+});
 /* ---------- render ---------- */
 const REASON={hq:"総司令部を占領",nomoves:"動かせる駒がなくなった",resign:"投了",cheat:"不正なデータを検出"};
 function renderHome(prefill){
@@ -574,7 +624,7 @@ function render(){
   const g=G,side=mySide(),viewSide=side||"A",opp=other(viewSide);
   const ready=g.ready||{},started=bothReady(g),P=g.players||{};
   const inSetup=side&&!ready[side];
-  if(inSetup&&!S.setupArr){const d=lsJSON("gj-draft-"+g.gid);S.setupArr=(Array.isArray(d)&&d.length===23)?d:randomArr(side)}
+  if(inSetup&&!S.setupArr){const d=lsJSON("gj-draft-"+g.gid);S.setupArr=(Array.isArray(d)&&d.length===23)?d:(lastSetup(side)||randomArr(side))}
   const board=boardOf(g),types=myTypes(),fin=g.final||{};
   const pend=(g.pending||[])[0],last=(g.last||[])[0];
   const myTurn=started&&!g.winner&&side&&g.turn===side&&!pend&&PRIV;
@@ -649,7 +699,7 @@ function render(){
     }
     if(m)h+=`<div class="lastmsg">直前：${m}</div>`;
   }
-  if(side&&inSetup)h+=`<div class="row"><button id="shuffleBtn">ランダムに並べる</button><button class="primary" id="readyBtn">配置を確定する</button></div>`;
+  if(side&&inSetup)h+=`<div class="row"><button id="shuffleBtn">ランダムに並べる</button><button class="primary" id="readyBtn">配置を確定する</button></div>`+presetsHTML();
   if(side&&started&&!g.winner){
     h+=S.resign?`<div class="row"><span>本当に投了しますか？</span><button class="danger" id="resignYes">投了する</button><button id="resignNo">やめる</button></div>`:`<div class="row"><button class="danger" id="resignBtn">投了</button></div>`;
   }
