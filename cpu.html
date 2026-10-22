@@ -1,0 +1,566 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>軍人将棋 対コンピュータ</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Shippori+Mincho+B1:wght@600;800&family=Zen+Kaku+Gothic+New:wght@400;700&display=swap">
+<style>
+:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+body{margin:0}
+[hidden]{display:none!important}
+
+*{box-sizing:border-box}
+
+/* Layout: one narrow column — a field map (the board) framed by the two commanders, rules folded below */
+:root{
+  --bg:#e3e5da; --surface:#f1f2ea; --ink:#1e2419; --muted:#5d6553; --line:#c4c8b6;
+  --board:#8d9662; --board-line:#737c4c; --river:#6f8f96; --bridge:#a88b5c;
+  --tile:#f4efdf; --tile-shadow:rgba(30,36,25,.35);
+  --red:#9b2c22; --blue:#24476d; --red-soft:rgba(155,44,34,.12); --blue-soft:rgba(36,71,109,.12);
+  --brass:#c99700; --danger:#9b2c22; --ok:#3d7a3a;
+  --f-display:"Shippori Mincho B1","Hiragino Mincho ProN","Yu Mincho",serif;
+  --f-body:"Zen Kaku Gothic New","Hiragino Sans","Yu Gothic",system-ui,sans-serif;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#151912; --surface:#1f251a; --ink:#e4e6da; --muted:#9aa18d; --line:#343c2c;
+  --board:#4a5532; --board-line:#3a4327; --river:#34525a; --bridge:#7a6440;
+  --tile:#ece5d0; --tile-shadow:rgba(0,0,0,.55);
+  --red:#c9503f; --blue:#6a95c4; --red-soft:rgba(201,80,63,.16); --blue-soft:rgba(106,149,196,.16);
+  --brass:#e2b324; --danger:#e06a58; --ok:#7cc06f; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#151912; --surface:#1f251a; --ink:#e4e6da; --muted:#9aa18d; --line:#343c2c;
+  --board:#4a5532; --board-line:#3a4327; --river:#34525a; --bridge:#7a6440;
+  --tile:#ece5d0; --tile-shadow:rgba(0,0,0,.55);
+  --red:#c9503f; --blue:#6a95c4; --red-soft:rgba(201,80,63,.16); --blue-soft:rgba(106,149,196,.16);
+  --brass:#e2b324; --danger:#e06a58; --ok:#7cc06f; color-scheme:dark}
+html,body{height:100%}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:15px;line-height:1.6;padding-inline:16px;padding-block:12px 40px}
+.wrap{max-width:460px;margin:0 auto;display:flex;flex-direction:column;gap:14px}
+header{display:flex;align-items:baseline;justify-content:space-between;gap:12px}
+h1{font-family:var(--f-display);font-weight:800;font-size:1.6rem;letter-spacing:.08em;margin:0;line-height:1.2}
+h1 small{display:block;font-family:var(--f-body);font-weight:400;font-size:.72rem;letter-spacing:.2em;color:var(--muted)}
+h2{font-family:var(--f-display);font-size:1.1rem;margin:0;text-wrap:balance}
+button{font:inherit;cursor:pointer;border-radius:8px;border:1px solid var(--line);background:var(--surface);color:var(--ink);padding:.5em 1em;min-height:42px}
+button.primary{background:var(--ink);color:var(--bg);border-color:var(--ink);font-weight:700}
+button.danger{color:var(--danger);border-color:currentColor;background:transparent}
+button:disabled{opacity:.45;cursor:default}
+button:focus-visible,.cell:focus-visible,summary:focus-visible{outline:3px solid var(--brass);outline-offset:2px}
+.link{background:none;border:none;color:var(--muted);text-decoration:underline;min-height:0;padding:0}
+.note{color:var(--muted);font-size:.85rem}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.notice{border:1px solid var(--line);border-radius:10px;padding:12px 14px;background:var(--surface)}
+/* players */
+.player{display:flex;align-items:center;gap:10px;padding:8px 12px;border-radius:10px;border:1px solid transparent}
+.player .dot{width:12px;height:12px;border-radius:3px;flex:none}
+.player.A .dot{background:var(--red)} .player.B .dot{background:var(--blue)}
+.player .name{font-weight:700;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.player .info{margin-left:auto;font-size:.8rem;color:var(--muted);font-variant-numeric:tabular-nums;white-space:nowrap}
+.player.turn{border-color:var(--brass);background:var(--surface)}
+.player.turn .info::before{content:"手番 ・ ";color:var(--brass);font-weight:700}
+/* board */
+.board{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:3px;padding:6px;background:var(--board-line);border-radius:6px;user-select:none;-webkit-user-select:none}
+.cell{position:relative;min-width:0;aspect-ratio:1/1.08;background:var(--board);border-radius:3px;display:grid;place-items:center;padding:3px}
+.cell.hq{grid-column:span 2;aspect-ratio:2/1.08;background:repeating-linear-gradient(45deg,var(--board) 0 8px,var(--board-line) 8px 10px)}
+.cell.hq::after{content:"司令部";position:absolute;top:1px;left:6px;z-index:2;font-size:.6rem;letter-spacing:.15em;color:var(--tile);opacity:.85}
+.cell.water{aspect-ratio:auto;height:22px;background:var(--river);border-radius:2px}
+.cell.bridge{aspect-ratio:auto;height:22px;background:repeating-linear-gradient(90deg,var(--bridge) 0 5px,var(--board-line) 5px 6px)}
+.cell.bridge::after{content:"突入口";font-size:.58rem;color:var(--tile);letter-spacing:.1em}
+.cell.myzone{box-shadow:inset 0 0 0 1px rgba(255,255,255,.12)}
+.cell.last-from{box-shadow:inset 0 0 0 2px rgba(255,255,255,.5)}
+.cell.last-to{box-shadow:inset 0 0 0 2px var(--brass)}
+.cell.can::before{content:"";width:28%;aspect-ratio:1;border-radius:50%;background:var(--brass);opacity:.85;position:absolute}
+.cell.hit::before{content:"";position:absolute;inset:1px;z-index:2;pointer-events:none;border:3px solid var(--brass);border-radius:5px}
+.cell.clickable{cursor:pointer}
+.tile{width:100%;height:100%;max-width:64px;border-radius:5px;background:var(--tile);box-shadow:0 2px 0 var(--tile-shadow);display:grid;place-items:center;font-family:var(--f-display);font-weight:800;font-size:clamp(.66rem,3.4vw,.95rem);line-height:1.05;text-align:center;letter-spacing:-.02em;position:relative;z-index:1;overflow:hidden;word-break:keep-all}
+.hq .tile{max-width:64px}
+.tile.A{color:var(--red);border-bottom:3px solid var(--red)}
+.tile.B{color:var(--blue);border-bottom:3px solid var(--blue)}
+.tile.long{font-size:clamp(.56rem,2.7vw,.78rem)}
+.tile.back{color:var(--tile);border:none}
+.tile.back.A{background:var(--red)} .tile.back.B{background:var(--blue)}
+.tile.back::after{content:"★";font-size:1.1em;opacity:.8}
+.tile.reveal{opacity:.92}
+.tile.reveal::after{content:none}
+.tile.sel{outline:3px solid var(--brass);outline-offset:1px;transform:translateY(-2px)}
+@media (prefers-reduced-motion:no-preference){.tile{transition:transform .12s}}
+.status{font-size:.95rem;min-height:1.6em}
+.status strong{font-family:var(--f-display)}
+.lastmsg{font-size:.88rem;color:var(--muted);border-left:3px solid var(--brass);padding-left:10px}
+.banner{font-family:var(--f-display);font-size:1.25rem;text-align:center;padding:14px;border-radius:10px;background:var(--surface);border:1px solid var(--brass)}
+.lost{font-size:.82rem;color:var(--muted)}
+.lost b{font-family:var(--f-display);color:var(--ink);font-weight:600;margin-right:4px}
+details{border-top:1px solid var(--line);padding-top:10px}
+summary{cursor:pointer;font-family:var(--f-display);font-weight:600}
+.rules{font-size:.86rem}
+.rules h3{font-size:.9rem;margin:14px 0 4px;font-family:var(--f-display)}
+.rules ul{margin:0;padding-left:1.2em}
+.rules table{border-collapse:collapse;width:100%;font-size:.82rem}
+.rules td{border-bottom:1px solid var(--line);padding:4px 6px;vertical-align:top}
+.rules td:first-child{white-space:nowrap;font-weight:700;font-family:var(--f-display)}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(16px + env(safe-area-inset-bottom,0px));background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:8px;font-size:.88rem;max-width:calc(100% - 32px);z-index:9}
+.chip{display:inline-block;font-size:.72rem;letter-spacing:.06em;padding:.1em .6em;border-radius:99px;border:1px solid currentColor;white-space:nowrap}
+.home{display:flex;flex-direction:column;gap:14px}
+.lead{margin:0}
+.card{display:flex;flex-direction:column;gap:8px;align-items:flex-start;padding:14px;border:1px solid var(--line);border-radius:10px;background:var(--surface)}
+.card .note{margin:0}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+.player .side{font-weight:400;font-size:.75rem;color:var(--muted);margin-left:8px}
+.leave{justify-content:flex-end;margin-top:4px}
+.start{display:flex;flex-direction:column;gap:14px;padding:16px;border:1px solid var(--line);border-radius:10px;background:var(--surface)}
+.presets{display:flex;flex-direction:column;gap:8px;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--surface)}
+.presets-head{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap}
+.plabel{font-size:.72rem;letter-spacing:.15em;color:var(--muted)}
+.presets .note{margin:0}
+.pchips{display:flex;flex-wrap:wrap;gap:6px}
+.pchip{display:inline-flex;border:1px solid var(--line);border-radius:99px;overflow:hidden;background:var(--bg)}
+.pchip button{border:none;border-radius:0;min-height:38px;padding:.3em .9em;background:transparent}
+.pchip .x{color:var(--muted);padding:.3em .7em;border-left:1px solid var(--line)}
+#presetName{font:inherit;min-height:42px;padding:.3em .6em;border-radius:8px;border:1px solid var(--line);background:var(--bg);color:var(--ink);width:11em;max-width:100%}
+#presetName:focus-visible{outline:3px solid var(--brass);outline-offset:1px}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+a.btn{display:inline-flex;align-items:center;justify-content:center;min-height:42px;padding:.5em 1em;border-radius:8px;border:1px solid var(--line);background:var(--surface);color:var(--ink);text-decoration:none}
+a.btn:focus-visible{outline:3px solid var(--brass);outline-offset:2px}
+a.navlink{color:var(--muted);font-size:.85rem}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>軍人将棋<small>VS COMPUTER ・ 23枚制</small></h1>
+    <a class="navlink" href="./">友だちと対戦 →</a>
+  </header>
+  <main id="app"><p class="note">読み込み中…</p></main>
+  <details id="rulesBox">
+    <summary>ルール（一般的な23枚制）</summary>
+    <div class="rules">
+      <h3>盤と配置</h3>
+      <ul>
+        <li>自陣は横6×縦4マス。最奥中央の2マス分が総司令部（1マスとして扱います）。</li>
+        <li>23枚を自陣にすべて並べます。軍旗は最奥列に置けません。</li>
+        <li>中央の川は左右2か所の突入口からしか渡れません（飛行機は除く）。突入口を通ると、1歩で相手陣の最前列に入れます。</li>
+      </ul>
+      <h3>動き方</h3>
+      <table><tbody>
+        <tr><td>将官・佐官・尉官・スパイ</td><td>縦横に1マス</td></tr>
+        <tr><td>タンク</td><td>縦横に1マス、または前へ2マス</td></tr>
+        <tr><td>騎兵</td><td>縦横に2マスまで</td></tr>
+        <tr><td>工兵</td><td>縦横にどこまでも（飛び越え不可）</td></tr>
+        <tr><td>飛行機</td><td>縦にどこまでも駒を飛び越えて進める。横は1マス</td></tr>
+        <tr><td>地雷・軍旗</td><td>動けません</td></tr>
+      </tbody></table>
+      <h3>強弱</h3>
+      <table><tbody>
+        <tr><td>階級</td><td>大将＞中将＞少将＞大佐＞中佐＞少佐＞大尉＞中尉＞少尉</td></tr>
+        <tr><td>飛行機</td><td>将官以外すべてに勝つ</td></tr>
+        <tr><td>タンク</td><td>佐官・尉官・騎兵・スパイに勝つ。将官・飛行機・工兵・地雷に負ける</td></tr>
+        <tr><td>騎兵</td><td>工兵・スパイにだけ勝つ</td></tr>
+        <tr><td>工兵</td><td>タンク・地雷・スパイに勝つ</td></tr>
+        <tr><td>スパイ</td><td>自分から攻めたときだけ大将に勝つ。それ以外は全敗</td></tr>
+        <tr><td>地雷</td><td>飛行機と工兵以外を倒す（地雷は残る）</td></tr>
+        <tr><td>軍旗</td><td>すぐ後ろにある味方の駒と同じ強さ。後ろが空なら最弱</td></tr>
+        <tr><td>同じ駒</td><td>相討ちで両方消える</td></tr>
+      </tbody></table>
+      <h3>勝ち負け</h3>
+      <ul>
+        <li>将官か佐官で相手の総司令部に入れば勝ち。</li>
+        <li>自分の手番に動かせる駒がなくなったら負け。投了もできます。</li>
+        <li>100手のあいだ駒が一度もぶつからなければ引き分け。</li>
+      </ul>
+      <h3>コンピュータについて</h3>
+      <ul>
+        <li>勝敗の判定はこのページが審判として行い、結果（どちらが勝ったか）だけを表示します。</li>
+        <li>コンピュータはあなたの駒の正体を見ません。駒の動き方とぶつかった結果から推理して指します。</li>
+        <li>対局の途中で閉じても、同じ端末で開き直せば続きから再開できます。</li>
+      </ul>
+    </div>
+  </details>
+</div>
+<div class="toast" id="toast" hidden></div>
+<script>
+"use strict";
+/* ---------- rules ---------- */
+const SET=[["大将",1],["中将",1],["少将",1],["大佐",1],["中佐",1],["少佐",1],["大尉",2],["中尉",2],["少尉",2],["飛行機",2],["タンク",2],["騎兵",1],["工兵",2],["地雷",2],["スパイ",1],["軍旗",1]];
+const ALLTYPES=SET.flatMap(([t,n])=>Array(n).fill(t));
+const SHO=["大将","中将","少将"], SA=["大佐","中佐","少佐"], HQ_TAKERS=[...SHO,...SA];
+const RANK={大将:9,中将:8,少将:7,大佐:6,中佐:5,少佐:4,大尉:3,中尉:2,少尉:1};
+const isOff=t=>t in RANK;
+const rowOf=n=>Math.floor(n/6), colOf=n=>n%6;
+const isHQcell=(r,c)=>(r===0||r===8)&&(c===2||c===3);
+const canon=(r,c)=>r*6+((r===0||r===8)&&c===3?2:c);
+const isHQnode=n=>n===2||n===50;
+const hqOf=s=>s==="A"?50:2;
+const other=s=>s==="A"?"B":"A";
+const backRow=s=>s==="A"?8:0;
+const fwd=s=>s==="A"?-1:1;
+const SIDE_NAME={A:"紅",B:"藍"};
+function nodesOf(side){const rows=side==="A"?[5,6,7,8]:[0,1,2,3];const out=[];for(const r of rows)for(let c=0;c<6;c++){if(isHQcell(r,c)&&c===3)continue;out.push(r*6+c)}return out}
+
+function beats(x,y){
+  if(isOff(x)&&isOff(y))return RANK[x]>RANK[y];
+  if(x==="飛行機")return !SHO.includes(y);
+  if(y==="飛行機")return SHO.includes(x);
+  if(x==="タンク")return y!=="工兵"&&!SHO.includes(y);
+  if(y==="タンク")return SHO.includes(x)||x==="工兵";
+  if(x==="工兵")return false;
+  if(y==="工兵")return true;
+  if(x==="騎兵")return false;
+  if(y==="騎兵")return true;
+  return false;
+}
+/* 'A' attacker wins, 'D' defender wins, 'T' both removed */
+function fight(a,d){
+  if(d==="none")return "A";
+  if(a===d)return "T";
+  if(d==="地雷")return(a==="飛行機"||a==="工兵")?"A":"D";
+  if(a==="スパイ")return d==="大将"?"A":"D";
+  if(d==="スパイ")return "A";
+  return beats(a,d)?"A":"D";
+}
+function rays(board,from,dr,dc,max,jump,side){
+  const out=new Set();
+  const starts=isHQnode(from)?[from,from+1]:[from];
+  for(const s of starts){
+    let r=rowOf(s),c=colOf(s);
+    for(let k=0;k<max;k++){
+      r+=dr;c+=dc;
+      if(r<0||r>8||c<0||c>5)break;
+      if(r===4){if(c===1||c===4||jump){r+=dr;if(r<0||r>8)break}else break}
+      const n=canon(r,c);
+      if(n===from)continue;
+      const occ=board[n];
+      if(occ){if(occ[0]!==side)out.add(n);if(jump)continue;break}
+      out.add(n);
+      if(isHQnode(n)&&!jump)break;
+    }
+  }
+  return out;
+}
+const DIRS=[[1,0],[-1,0],[0,1],[0,-1]];
+function genMoves(board,from,type,side){
+  const out=new Set();const add=s=>s.forEach(x=>out.add(x));
+  if(type==="地雷"||type==="軍旗")return out;
+  if(type==="工兵"){DIRS.forEach(([a,b])=>add(rays(board,from,a,b,8,false,side)));return out}
+  if(type==="騎兵"){DIRS.forEach(([a,b])=>add(rays(board,from,a,b,2,false,side)));return out}
+  if(type==="飛行機"){add(rays(board,from,1,0,8,true,side));add(rays(board,from,-1,0,8,true,side));add(rays(board,from,0,1,1,false,side));add(rays(board,from,0,-1,1,false,side));return out}
+  DIRS.forEach(([a,b])=>add(rays(board,from,a,b,1,false,side)));
+  if(type==="タンク")add(rays(board,from,fwd(side),0,2,false,side));
+  return out;
+}
+function flagRear(board,node,side,types){
+  const r=rowOf(node)+(side==="A"?1:-1),c=colOf(node);
+  if(r<0||r>8)return{idx:null,type:"none"};
+  const idx=canon(r,c),pid=board[idx];
+  if(pid&&pid[0]===side)return{idx,pid,type:types[pid]};
+  return{idx,type:"none"};
+}
+
+/* ---------- storage ---------- */
+function lsGet(k){try{return localStorage.getItem(k)}catch{return null}}
+function lsSet(k,v){try{localStorage.setItem(k,v)}catch{}}
+function lsDel(k){try{localStorage.removeItem(k)}catch{}}
+const $app=document.getElementById("app");
+function toast(t){const el=document.getElementById("toast");el.textContent=t;el.hidden=false;clearTimeout(toast.t);toast.t=setTimeout(()=>el.hidden=true,3200)}
+
+/* ---------- state ---------- */
+const TYPES=SET.map(([t])=>t);
+const COUNT=Object.fromEntries(SET);
+const VAL={大将:10,中将:9,少将:8,大佐:7,中佐:6,少佐:5,大尉:4,中尉:3.5,少尉:3,飛行機:8,タンク:6,騎兵:2.5,工兵:4.5,スパイ:4,地雷:3,軍旗:5};
+let G=null;
+const S={sel:null,setupArr:null,setupSel:null,confirm:null,thinking:false};
+function save(){if(G)lsSet("gj-cpu",JSON.stringify(G))}
+function load(){const v=lsGet("gj-cpu");if(!v)return null;try{return JSON.parse(v)}catch{return null}}
+
+function newGame(humanSide){
+  G={phase:"setup",human:humanSide,ai:other(humanSide),board:Array(54).fill(null),types:{},know:{},turn:"A",moveNo:0,winner:null,reason:null,last:null,prev:{}};
+  S.setupArr=lastSetup(humanSide)||randomArr(humanSide);S.setupSel=null;S.sel=null;S.confirm=null;
+  save();render();
+}
+function randomArr(side){
+  const nodes=nodesOf(side);
+  for(;;){const a=[...ALLTYPES];shuffle(a);if(rowOf(nodes[a.indexOf("軍旗")])!==backRow(side))return a}
+}
+function shuffle(a){for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]]}return a}
+
+/* computer's placement: a mine guards the HQ, the flag sits in front of a strong piece */
+function aiPlacement(side){
+  const nodes=nodesOf(side),br=backRow(side),dir=side==="A"?-1:1;
+  const at=(r,c)=>nodes.indexOf(canon(r,c));
+  const arr=Array(23).fill(null),pool=[...ALLTYPES];
+  const take=t=>{pool.splice(pool.indexOf(t),1);return t};
+  const hq=nodes.indexOf(hqOf(side));
+  if(Math.random()<.65)arr[hq]=take("地雷");
+  const frontHQ=[at(br+dir,2),at(br+dir,3)];
+  const mineSpot=frontHQ[Math.floor(Math.random()*2)];
+  if(pool.includes("地雷")&&Math.random()<.7)arr[mineSpot]=take("地雷");
+  // flag on the 2nd row with a general right behind it
+  const fc=[0,1,4,5][Math.floor(Math.random()*4)];
+  arr[at(br+dir,fc)]=take("軍旗");
+  arr[at(br,fc)]=take(Math.random()<.5?"大将":"中将");
+  // engineers, tanks and planes lean forward
+  const front=shuffle(nodes.map((n,i)=>i).filter(i=>rowOf(nodes[i])===br+3*dir&&arr[i]==null));
+  for(const t of["工兵","タンク","飛行機"])if(pool.includes(t)&&front.length&&Math.random()<.7)arr[front.pop()]=take(t);
+  const rest=shuffle(arr.map((v,i)=>v==null?i:-1).filter(i=>i>=0));
+  shuffle(pool).forEach((t,k)=>arr[rest[k]]=t);
+  return arr;
+}
+
+function startPlay(){
+  const h=G.human,a=G.ai,arr=S.setupArr;
+  if(rowOf(nodesOf(h)[arr.indexOf("軍旗")])===backRow(h)){toast("軍旗は最奥の列に置けません");return}
+  const b=Array(54).fill(null),types={},know={};
+  nodesOf(h).forEach((n,i)=>{const p=h+i;b[n]=p;types[p]=arr[i];know[p]=[...TYPES]});
+  const aa=aiPlacement(a);
+  nodesOf(a).forEach((n,i)=>{const p=a+i;b[n]=p;types[p]=aa[i]});
+  Object.assign(G,{phase:"play",board:b,types,know,turn:"A"});
+  rememberLast(h,arr);S.setupArr=null;save();render();maybeAI();
+}
+
+/* ---------- referee ---------- */
+function legalFor(side){
+  const out=[];
+  G.board.forEach((p,n)=>{if(p&&p[0]===side)genMoves(G.board,n,G.types[p],side).forEach(t=>out.push([n,t]))});
+  return out;
+}
+function effType(board,node,side){const t=G.types[board[node]];return t==="軍旗"?flagRear(board,node,side,G.types).type:t}
+function applyMove(from,to){
+  const b=G.board,before=b.slice(),pid=b[from],side=pid[0],tgt=b[to],type=G.types[pid];
+  if(!tgt){
+    b[to]=pid;b[from]=null;
+    G.last={kind:"move",by:side,from,to};
+    if(to===hqOf(other(side))&&HQ_TAKERS.includes(type)){G.winner=side;G.reason="hq"}
+  }else{
+    const ds=tgt[0],eff=effType(b,to,ds),out=fight(type,eff);
+    if(out==="A"){b[to]=pid;b[from]=null}else if(out==="D"){b[from]=null}else{b[from]=null;b[to]=null}
+    G.last={kind:"battle",by:side,from,to,atk:pid,def:tgt,outcome:out};
+    if(out==="A"&&to===hqOf(ds)&&HQ_TAKERS.includes(type)){G.winner=side;G.reason="hq"}
+    // what the computer learns from the referee's verdict
+    if(side===G.human)narrow(pid,c=>fight(c,eff)===out);
+    else narrow(tgt,c=>c==="軍旗"||fight(type,c)===out);
+  }
+  if(side===G.human)narrow(pid,c=>genMoves(before,from,c,side).has(to));
+  G.prev[pid]=from;
+  G.quiet=tgt?0:(G.quiet||0)+1;
+  G.moveNo++;G.turn=other(side);
+  if(!G.winner&&!legalFor(G.turn).length){G.winner=other(G.turn);G.reason="nomoves"}
+  if(!G.winner&&G.quiet>=100){G.winner="draw";G.reason="quiet"}
+  if(G.winner)G.phase="over";
+  S.sel=null;save();render();maybeAI();
+}
+function narrow(pid,fn){const k=G.know[pid];if(!k)return;const n=k.filter(fn);if(n.length)G.know[pid]=n}
+
+/* ---------- computer player ---------- */
+function probs(pid){const c=G.know[pid]||TYPES;let W=0;const w=c.map(t=>{const x=COUNT[t];W+=x;return x});return c.map((t,i)=>[t,w[i]/W])}
+function pBeats(hp,myEff,hpAttacks){
+  let p=0;for(const[c,w]of probs(hp)){const eff=c==="軍旗"?"少佐":c;const o=hpAttacks?fight(eff,myEff):fight(myEff,eff);if(hpAttacks?o==="A":o==="D")p+=w}return p;
+}
+function pathDist(n,side){
+  const t=hqOf(other(side)),tr=rowOf(t),r=rowOf(n),c=isHQnode(n)?2.5:colOf(n);
+  const home=side==="A"?r>=5:r<=3;
+  if(home)return Math.min(...[1,4].map(bc=>Math.abs(r-4)+Math.abs(c-bc)+Math.abs(4-tr)+Math.abs(bc-2.5)));
+  return Math.abs(r-tr)+Math.abs(c-2.5);
+}
+function threatAt(board,node,mySide,myType){
+  // chance that some human piece can reach `node` next turn and beat what stands there
+  const myEff=myType;let worst=0;
+  board.forEach((p,n)=>{
+    if(!p||p[0]===mySide)return;
+    const reach=probs(p).filter(([c])=>genMoves(board,n,c,p[0]).has(node));
+    if(!reach.length)return;
+    let pr=0;for(const[c,w]of reach){const eff=c==="軍旗"?"少佐":c;if(fight(eff,myEff)==="A")pr+=w}
+    worst=Math.max(worst,pr);
+  });
+  return worst;
+}
+function hqDanger(board,ai){
+  // human pieces that could walk into the computer's HQ next turn, weighted by the chance they can capture it
+  const hq=hqOf(ai),list=[];
+  board.forEach((p,n)=>{
+    if(!p||p[0]===ai)return;
+    let pt=0;for(const[c,w]of probs(p))if(HQ_TAKERS.includes(c)&&genMoves(board,n,c,p[0]).has(hq))pt+=w;
+    if(pt>0)list.push([n,pt]);
+  });
+  return list;
+}
+function aiChoose(){
+  const ai=G.ai,b=G.board,moves=legalFor(ai);
+  if(!moves.length)return null;
+  const danger=hqDanger(b,ai),dangerMap=new Map(danger),hqOcc=b[hqOf(ai)];
+  const late=Math.min(1,G.moveNo/80);
+  let best=null,bs=-1e9;
+  for(const[f,t]of moves){
+    const pid=b[f],T=G.types[pid],tgt=b[t];
+    let s=Math.random()*.35;
+    if(!tgt){
+      if(t===hqOf(G.human)&&HQ_TAKERS.includes(T))return[f,t];
+      const adv=pathDist(f,ai)-pathDist(t,ai);
+      s+=adv*(HQ_TAKERS.includes(T)?.3+.3*late:["工兵","飛行機","タンク","騎兵"].includes(T)?.2:.12);
+      const nb=b.slice();nb[t]=pid;nb[f]=null;
+      const myEff=T==="軍旗"?"少佐":T;
+      s+=(threatAt(b,f,ai,myEff)-threatAt(nb,t,ai,myEff))*VAL[T]*.8;
+      if(t===hqOf(ai)&&danger.length&&!hqOcc)s+=6*Math.max(...danger.map(d=>d[1]));
+      if(f===hqOf(ai)&&T==="地雷")s-=50;
+      if(G.prev[pid]===t)s-=.4;
+      if(T==="大将"||T==="中将")s-=.3*(1-late);
+    }else{
+      let ev=.4;
+      for(const[c,w]of probs(tgt)){
+        const eff=c==="軍旗"?"少佐":c,o=fight(T,eff);
+        if(o==="A")ev+=w*VAL[c];else if(o==="D")ev-=w*VAL[T];else ev+=w*(VAL[c]-VAL[T]);
+      }
+      s+=ev;
+      if(dangerMap.has(t))s+=8*dangerMap.get(t);
+      if(t===hqOf(G.human)&&HQ_TAKERS.includes(T)){let pw=0;for(const[c,w]of probs(tgt))if(fight(T,c==="軍旗"?"少佐":c)==="A")pw+=w;s+=pw*40}
+    }
+    if(s>bs){bs=s;best=[f,t]}
+  }
+  return best;
+}
+function maybeAI(){
+  if(!G||G.phase!=="play"||G.turn!==G.ai||S.thinking)return;
+  S.thinking=true;render();
+  setTimeout(()=>{S.thinking=false;const m=aiChoose();if(m)applyMove(m[0],m[1]);else render()},window.__aiDelay||650);
+}
+
+function setupSide(){return G&&G.phase==="setup"?G.human:null}
+function onSetupChanged(){}
+/* ---------- saved placements (kept in this browser, independent of rooms) ---------- */
+function relKey(side,n){if(isHQnode(n))return"hq";const r=rowOf(n),c=colOf(n);return side==="A"?(r-5)+"-"+c:(3-r)+"-"+(5-c)}
+function loadPresets(){try{const v=JSON.parse(localStorage.getItem("gj-presets")||"[]");return Array.isArray(v)?v:[]}catch{return[]}}
+function storePresets(l){try{localStorage.setItem("gj-presets",JSON.stringify(l));return true}catch{return false}}
+function toPreset(side,arr){const m={};nodesOf(side).forEach((n,i)=>m[relKey(side,n)]=arr[i]);return m}
+function fromPreset(side,m){if(!m)return null;const arr=nodesOf(side).map(n=>m[relKey(side,n)]);return[...arr].sort().join()===[...ALLTYPES].sort().join()?arr:null}
+function rememberLast(side,arr){try{localStorage.setItem("gj-last-setup",JSON.stringify(toPreset(side,arr)))}catch{}}
+function lastSetup(side){try{return fromPreset(side,JSON.parse(localStorage.getItem("gj-last-setup")||"null"))}catch{return null}}
+const pEsc=s=>String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+function presetsHTML(){
+  const l=loadPresets();
+  let h=`<section class="presets" aria-label="保存した配置"><div class="presets-head"><span class="plabel">保存した配置</span>`;
+  h+=S.presetForm?`</div><form id="presetForm" class="row" autocomplete="off"><label class="sr" for="presetName">配置の名前</label><input id="presetName" maxlength="16" value="配置${l.length+1}"><button class="primary" type="submit">保存</button><button type="button" id="presetCancel">やめる</button></form>`
+    :`<button id="presetSave">今の配置を保存</button></div>`;
+  if(S.presetDel!=null&&l[S.presetDel])h+=`<div class="row"><span>「${pEsc(l[S.presetDel].name)}」を削除しますか？</span><button class="danger" id="pdelYes">削除する</button><button id="pdelNo">やめる</button></div>`;
+  h+=l.length?`<div class="pchips">${l.map((p,i)=>`<span class="pchip"><button data-preset="${i}">${pEsc(p.name)}</button><button class="x" data-pdel="${i}" aria-label="${pEsc(p.name)}を削除">×</button></span>`).join("")}</div>`
+    :`<p class="note">まだありません。気に入った並びを保存しておくと、次の対局でタップ1回で呼び出せます。</p>`;
+  return h+`</section>`;
+}
+document.addEventListener("click",e=>{
+  const t=e.target.closest("button");if(!t)return;
+  const side=setupSide();if(!side)return;
+  if(t.id==="presetSave"){S.presetForm=true;S.presetDel=null;render();const i=document.getElementById("presetName");if(i){i.focus();i.select()}return}
+  if(t.id==="presetCancel"){S.presetForm=false;return render()}
+  if(t.dataset.preset!=null){const p=loadPresets()[+t.dataset.preset],a=p&&fromPreset(side,p.map);if(a){S.setupArr=a;S.setupSel=null;onSetupChanged();toast(`「${p.name}」の配置に並べました`)}else toast("この配置は読み込めませんでした");return render()}
+  if(t.dataset.pdel!=null){S.presetDel=+t.dataset.pdel;S.presetForm=false;return render()}
+  if(t.id==="pdelYes"){const l=loadPresets();l.splice(S.presetDel,1);storePresets(l);S.presetDel=null;return render()}
+  if(t.id==="pdelNo"){S.presetDel=null;return render()}
+});
+document.addEventListener("submit",e=>{
+  if(e.target.id!=="presetForm")return;e.preventDefault();
+  const side=setupSide();if(!side)return;
+  const name=(document.getElementById("presetName").value||"").trim().slice(0,16)||"配置";
+  const l=loadPresets().filter(p=>p.name!==name);l.unshift({name,map:toPreset(side,S.setupArr)});if(l.length>12)l.length=12;
+  toast(storePresets(l)?`「${name}」を保存しました`:"このブラウザでは保存できませんでした");
+  S.presetForm=false;render();
+});
+/* ---------- render ---------- */
+const REASON={hq:"総司令部を占領",nomoves:"動かせる駒がなくなった",resign:"投了",quiet:"100手のあいだ駒がぶつからなかった"};
+function render(){
+  if(!G){
+    $app.innerHTML=`<section class="start">
+      <p class="lead">コンピュータはあなたの駒を見ずに、駒の動き方とぶつかった結果だけから推理して指します。</p>
+      <div class="row"><button class="primary" data-start="A">先手（紅）で始める</button><button data-start="B">後手（藍）で始める</button></div>
+    </section>`;return;
+  }
+  const h=G.human,ai=G.ai,b=G.board,types=G.types,setup=G.phase==="setup",over=G.phase==="over";
+  const myTurn=G.phase==="play"&&G.turn===h&&!S.thinking;
+  let legal=new Set();if(myTurn&&S.sel!=null&&b[S.sel])legal=genMoves(b,S.sel,types[b[S.sel]],h);
+  const count=s=>b.filter(p=>p&&p[0]===s).length;
+  const pl=s=>`<div class="player ${s}${G.phase==="play"&&G.turn===s?" turn":""}"><span class="dot"></span><span class="name">${s===h?"あなた":"コンピュータ"}<span class="side">${SIDE_NAME[s]}${s==="A"?"・先手":"・後手"}</span></span><span class="info">${setup?(s===h?"配置中":"配置完了"):`残り ${count(s)}枚`}</span></div>`;
+  let x=pl(ai)+`<div class="board" role="grid" aria-label="盤面">`;
+  const sn=setup?nodesOf(h):[];
+  for(let dr=0;dr<9;dr++)for(let dc=0;dc<6;dc++){
+    const r=h==="B"?8-dr:dr,c=h==="B"?5-dc:dc;
+    if(r===4){x+=(c===1||c===4)?`<div class="cell bridge"></div>`:`<div class="cell water"></div>`;continue}
+    if(isHQcell(r,c)&&dc===3)continue;
+    const n=canon(r,c),cls=["cell"];if(isHQnode(n))cls.push("hq");
+    let tile="";
+    if(setup){
+      const i=sn.indexOf(n);
+      if(i>=0){const t=S.setupArr[i];tile=`<div class="tile ${h}${t.length>2?" long":""}${S.setupSel===i?" sel":""}">${t}</div>`;cls.push("clickable","myzone")}
+      else if(nodesOf(ai).includes(n))tile=`<div class="tile back ${ai}"></div>`;
+    }else{
+      const p=b[n];
+      if(p){const s=p[0],t=types[p];
+        if(s===h){tile=`<div class="tile ${s}${t.length>2?" long":""}${S.sel===n?" sel":""}">${t}</div>`;if(myTurn)cls.push("clickable")}
+        else if(over)tile=`<div class="tile back reveal ${s}${t.length>2?" long":""}">${t}</div>`;
+        else tile=`<div class="tile back ${s}"></div>`;
+      }
+      if(legal.has(n))cls.push(p?"hit":"can","clickable");
+      if(G.last){if(G.last.from===n)cls.push("last-from");if(G.last.to===n)cls.push("last-to")}
+    }
+    x+=`<div class="${cls.join(" ")}" data-n="${n}"${cls.includes("clickable")?` tabindex="0" role="button"`:""}>${tile}</div>`;
+  }
+  x+=`</div>`+pl(h);
+  let st="";
+  if(over){x+=`<div class="banner">${G.winner==="draw"?"引き分け":G.winner===h?"あなたの勝ち":"コンピュータの勝ち"}<div class="note">${REASON[G.reason]||""}</div></div>`;st="コンピュータの配置を盤上に表示しています。"}
+  else if(setup)st=`<strong>配置</strong>：2つの駒を順にタップすると入れ替わります。軍旗は最奥の列に置けません。`;
+  else if(S.thinking||G.turn===ai)st="コンピュータが考えています…";
+  else st=S.sel!=null?"動かす先を選んでください。":"<strong>あなたの手番</strong>です。動かす駒を選んでください。";
+  x+=`<div class="status">${st}</div>`;
+  const l=G.last;
+  if(l&&!setup){
+    let m="";
+    if(l.kind==="move")m=l.by===h?"駒を動かしました。":"コンピュータが駒を動かしました。";
+    else{
+      if(l.by===h){const t=types[l.atk];m=l.outcome==="A"?`あなたの${t}の攻撃が勝ちました。`:l.outcome==="D"?`あなたの${t}が攻撃に失敗し、やられました。`:`あなたの${t}は相討ちになりました。`}
+      else{const t=types[l.def];m=l.outcome==="A"?`コンピュータの攻撃で、あなたの${t}がやられました。`:l.outcome==="D"?`あなたの${t}が攻撃を防ぎました。`:`あなたの${t}は相討ちになりました。`}
+    }
+    x+=`<div class="lastmsg">直前：${m}</div>`;
+  }
+  if(setup)x+=`<div class="row"><button id="shuffleBtn">ランダムに並べる</button><button class="primary" id="readyBtn">配置を確定して開始</button></div>`+presetsHTML();
+  if(!setup){
+    const lost=Object.keys(types).filter(p=>p[0]===h&&!b.includes(p)).map(p=>types[p]);
+    x+=`<div class="lost">あなたが失った駒（${lost.length}）：${lost.length?lost.map(t=>`<b>${t}</b>`).join(""):"なし"}<br>コンピュータが失った駒：${23-count(ai)}枚</div>`;
+  }
+  if(S.confirm==="resign")x+=`<div class="row"><span>本当に投了しますか？</span><button class="danger" id="resignYes">投了する</button><button id="cancelBtn">やめる</button></div>`;
+  else if(S.confirm==="new")x+=`<div class="row"><span>この対局をやめて最初からにしますか？</span><button class="danger" id="newYes">最初からにする</button><button id="cancelBtn">やめる</button></div>`;
+  else x+=`<div class="row">${G.phase==="play"?`<button class="danger" id="resignBtn">投了</button>`:""}${over?`<button class="primary" id="againBtn">もう一局</button>`:`<button id="newBtn">最初から</button>`}</div>`;
+  $app.innerHTML=x;
+}
+
+/* ---------- input ---------- */
+document.addEventListener("click",e=>{
+  const t=e.target.closest("button,.cell");if(!t)return;
+  if(t.dataset.start)return newGame(t.dataset.start);
+  const id=t.id;
+  if(id==="shuffleBtn"){S.setupArr=randomArr(G.human);S.setupSel=null;return render()}
+  if(id==="readyBtn")return startPlay();
+  if(id==="resignBtn"){S.confirm="resign";return render()}
+  if(id==="newBtn"){S.confirm="new";return render()}
+  if(id==="cancelBtn"){S.confirm=null;return render()}
+  if(id==="resignYes"){S.confirm=null;G.winner=G.ai;G.reason="resign";G.phase="over";save();return render()}
+  if(id==="newYes"||id==="againBtn"){S.confirm=null;G=null;lsDel("gj-cpu");return render()}
+  if(t.classList.contains("cell")&&t.dataset.n!=null)cellClick(+t.dataset.n);
+});
+document.addEventListener("keydown",e=>{if((e.key==="Enter"||e.key===" ")&&e.target.classList&&e.target.classList.contains("cell")){e.preventDefault();e.target.click()}});
+function cellClick(n){
+  if(!G)return;
+  if(G.phase==="setup"){
+    const i=nodesOf(G.human).indexOf(n);if(i<0)return;
+    if(S.setupSel==null)S.setupSel=i;else{const a=S.setupArr;[a[S.setupSel],a[i]]=[a[i],a[S.setupSel]];S.setupSel=null}
+    return render();
+  }
+  if(G.phase!=="play"||G.turn!==G.human||S.thinking)return;
+  const b=G.board;
+  if(S.sel!=null&&S.sel!==n&&genMoves(b,S.sel,G.types[b[S.sel]],G.human).has(n))return applyMove(S.sel,n);
+  const p=b[n];S.sel=(p&&p[0]===G.human&&S.sel!==n)?n:null;render();
+}
+
+/* ---------- boot ---------- */
+G=load();
+if(G&&G.board&&G.board.some((x,n)=>x&&rowOf(n)===4)){G=null;lsDel("gj-cpu");setTimeout(()=>toast("ルールの修正にあわせて、対局を最初からにしました"),300)}
+if(G&&G.phase==="setup"){S.setupArr=lastSetup(G.human)||randomArr(G.human)}
+render();maybeAI();
+</script>
+</body>
+</html>
