@@ -3,6 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://unpkg.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; connect-src 'self' https: wss:; img-src 'self' data:; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta name="referrer" content="no-referrer">
 <title>軍人将棋オンライン</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Shippori+Mincho+B1:wght@600;800&family=Zen+Kaku+Gothic+New:wght@400;700&display=swap">
@@ -192,7 +194,7 @@ a.navlink{color:var(--muted);font-size:.85rem}
   </details>
 </div>
 <div class="toast" id="toast" hidden></div>
-<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js" integrity="sha384-nlUQ8ZqCbvStErob+biJNzSgltf6urV3VGqhfIfzhmg9RXmpeRm76ELw0pYnKlTR" crossorigin="anonymous"></script>
 <script>
 "use strict";
 /* ---------- rules ---------- */
@@ -312,8 +314,25 @@ function toast(t){const el=document.getElementById("toast");el.textContent=t;el.
 function send(m){if(NET.conn&&NET.conn.open){try{NET.conn.send(m)}catch(e){console.error(e)}}}
 function update(patch){G=deepMerge(clone(G),patch);G.v++;saveG();send({t:"state",g:G});afterChange()}
 function replaceGame(ng){G=ng;saveG();loadPriv();send({t:"state",g:G});afterChange()}
+const PID_RE=/^[AB]([0-9]|1[0-9]|2[0-2])$/;
+function validState(o){
+  try{
+    if(!isObj(o)||typeof o.gid!=="string"||!/^[A-Za-z0-9-]{1,40}$/.test(o.gid)||!Number.isFinite(o.v))return false;
+    if(!["A","B"].includes(o.turn))return false;
+    if(o.winner!=null&&!["A","B"].includes(o.winner))return false;
+    if(o.reason!=null&&!Object.prototype.hasOwnProperty.call(REASON,o.reason))return false;
+    if(o.board!=null&&(!Array.isArray(o.board)||o.board.length!==54||o.board.some(x=>x!==null&&!(typeof x==="string"&&PID_RE.test(x)))))return false;
+    for(const s of["A","B"]){
+      const f=o.final&&o.final[s];
+      if(f!=null){if(!isObj(f))return false;for(const k in f)if(!PID_RE.test(k)||!ALLTYPES.includes(f[k]))return false}
+      const ini=o.init&&o.init[s];
+      if(ini!=null){if(!isObj(ini))return false;for(const k in ini)if(!PID_RE.test(k)||!Number.isInteger(ini[k])||ini[k]<0||ini[k]>53)return false}
+    }
+    return true;
+  }catch{return false}
+}
 function mergeIn(o){
-  if(!o||!o.gid)return;
+  if(!validState(o))return;
   if(!G){G=clone(o);saveG();loadPriv();afterChange();return}
   const prevGid=G.gid;
   let base,oth;
@@ -662,7 +681,7 @@ function render(){
       if(pid&&(started||pid[0]!==side||!inSetup)){
         const s=pid[0];
         if(s===side&&types[pid]){const t=types[pid];tile=`<div class="tile ${s}${t.length>2?" long":""}${S.sel===n?" sel":""}">${t}</div>`;if(myTurn)cls.push("clickable")}
-        else if(fin[s]&&fin[s][pid]){const t=fin[s][pid];tile=`<div class="tile back reveal ${s}${t.length>2?" long":""}">${t}</div>`}
+        else if(fin[s]&&ALLTYPES.includes(fin[s][pid])){const t=fin[s][pid];tile=`<div class="tile back reveal ${s}${t.length>2?" long":""}">${t}</div>`}
         else tile=`<div class="tile back ${s}"></div>`;
       }
     }
